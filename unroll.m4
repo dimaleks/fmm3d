@@ -1,10 +1,7 @@
 divert(-1)
-define(`forloop',
-       `pushdef(`$1', `$2')_forloop(`$1', `$2', `$3', `$4')popdef(`$1')')
 
-define(`_forloop',
-       `$4`'ifelse($1, `$3', ,
-		   `define(`$1', incr($1))_forloop(`$1', `$2', `$3', `$4')')')
+define(`forloop', `ifelse(eval(`($2) <= ($3)'), `1', `pushdef(`$1')_$0(`$1', eval(`$2'), eval(`$3'), `$4')popdef(`$1')')')
+define(`_forloop', `define(`$1', `$2')$4`'ifelse(`$2', `$3', `', `$0(`$1', incr(`$2'), `$3', `$4')')')
 
 define(`forrloop',
        `pushdef(`$1', `$2')_forrloop(`$1', `$2', `$3', `$4')popdef(`$1')')
@@ -12,8 +9,6 @@ define(`forrloop',
 define(`_forrloop',
        `$4`'ifelse($1, `$3', ,
 		   `define(`$1', decr($1))_forrloop(`$1', `$2', `$3', `$4')')')
-
-define(`BINOMIAL', `esyscmd(python binomial.py $1 $2)')
 
 USAGE LUNROLL
 $1 iteration variable
@@ -24,6 +19,7 @@ $4 body
 define(LUNROLL, `forloop($1, $2, $3,`$4')')
 define(RLUNROLL, `forrloop($1, $2, $3, `$4')')
 define(`TMP', $1_$2)
+
 define(`echo', ``$*'')
 
 #usage
@@ -49,7 +45,4 @@ define(`REDUCE',`REDUCEL($*)' `ifelse(eval($# <= 3), 1, ,`
 REDUCE($1, ODDREMOVE(shift($*)))')')
 
 #example: REDUCE(`+=', s0, s1, s2, s3, s4, s5, s6, s7)
-
-
-divert(0)
-
+divert(0)dnl

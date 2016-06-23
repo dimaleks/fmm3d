@@ -1,15 +1,19 @@
-#define LMAX 15
+#define LMAX 10
 
 export void minmax( uniform const int N,
 					uniform const double x[],
 					uniform const double y[],
+					uniform const double z[],
 					uniform double& xmin,
 					uniform double& xmax,
 					uniform double& ymin,
-					uniform double& ymax)
+					uniform double& ymax,
+					uniform double& zmin,
+					uniform double& zmax)
 {
 	double myxmin = 1e100, myxmax = -1e100;
 	double myymin = 1e100, myymax = -1e100;
+	double myzmin = 1e100, myzmax = -1e100;
 
 	foreach(i=0...N)
 	{
@@ -26,52 +30,84 @@ export void minmax( uniform const int N,
 	}
 	ymin = reduce_min(myymin);
 	ymax = reduce_max(myymax);
+
+	foreach(i=0...N)
+	{
+		myzmin = min(myzmin, z[i]);
+		myzmax = max(myzmax, z[i]);
+	}
+	zmin = reduce_min(myzmin);
+	zmax = reduce_max(myzmax);
 }
 
-export void node_setup( uniform const double xsources[],
-						uniform const double ysources[],
-						uniform const double msources[],
-						uniform const int nsources,
-						uniform double& mass,
+
+export void node_setup( uniform const double xs[],
+						uniform const double ys[],
+						uniform const double zs[],
+						uniform const double qs[],
+						uniform const int n,
+						uniform double& Q,
 						uniform double& xcom,
 						uniform double& ycom,
+						uniform double& zcom,
 						uniform double& radius,
 						uniform double& weight)
 {
-	double myw = 0, myxsum = 0, myysum = 0, mymass = 0;
+	double myw = 10 * __DBL_EPSILON__, myxsum = 0, myysum = 0, myzsum = 0, myq = 0;
 
-	foreach (i=0...nsources)
+	foreach (i=0...n)
 	{
-		const double x = xsources[i];
-		const double y = ysources[i];
-		const double m = msources[i];
-		const double w = abs(m);
+		const double x = xs[i];
+		const double y = ys[i];
+		const double z = zs[i];
+		const double q = qs[i];
+		const double w = abs(q);
 
-		mymass += m;
+		myq += q;
 		myw += w;
 		myxsum += x * w;
 		myysum += y * w;
+		myzsum += z * w;
 	}
 
-	mass = reduce_add(mymass);
+	Q = reduce_add(myq);
 	weight = reduce_add(myw);
 	xcom = reduce_add(myxsum) / weight;
 	ycom = reduce_add(myysum) / weight;
+	zcom = reduce_add(myzsum) / weight;
 
 	double r2 = 0;
-	foreach (i=0...nsources)
+	foreach (i=0...n)
 	{
-		const double xr = xsources[i] - xcom;
-		const double yr = ysources[i] - ycom;
+		const double xr = xs[i] - xcom;
+		const double yr = ys[i] - ycom;
+		const double zr = zs[i] - zcom;
 
-		r2 = max(r2, xr * xr + yr * yr);
+		r2 = max(r2, xr * xr + yr * yr + zr * zr);
 	}
 
 	radius = sqrt(reduce_max(r2));
 }
 
-task unmasked void morton_int(uniform const int N, uniform const double x[], uniform const double y[],
-					 uniform const double xmin, uniform const double ymin, uniform const double ext, uniform int index[])
+inline int morton3D_SplitBy3bits(const int a)
+{
+	int x = a;
+	x = (x | (x << 16)) & 0xff0000ff;
+	x = (x | (x << 8))  & 0x0f00f00f;
+	x = (x | (x << 4))  & 0xc30c30c3;
+	x = (x | (x << 2))  & 0x49249249;
+	return x;
+}
+
+task unmasked void morton_int(	uniform const int N,
+								uniform const double x[],
+								uniform const double y[],
+								uniform const double z[],
+								uniform const double xmin,
+								uniform const double ymin,
+								uniform const double zmin,
+								uniform const double ext,
+								uniform int index[])
 {
 	const uniform double factor = 1.0 / ext * (1 << LMAX);
 
@@ -82,25 +118,19 @@ task unmasked void morton_int(uniform const int N, uniform const double x[], uni
 	{
 		int xid = floor((x[i] - xmin) * factor);
 		int yid = floor((y[i] - ymin) * factor);
+		int zid = floor((z[i] - ymin) * factor);
 
-		xid = (xid | (xid << 8)) & 0x00FF00FF;
-		xid = (xid | (xid << 4)) & 0x0F0F0F0F;
-		xid = (xid | (xid << 2)) & 0x33333333;
-		xid = (xid | (xid << 1)) & 0x55555555;
-
-		yid = (yid | (yid << 8)) & 0x00FF00FF;
-		yid = (yid | (yid << 4)) & 0x0F0F0F0F;
-		yid = (yid | (yid << 2)) & 0x33333333;
-		yid = (yid | (yid << 1)) & 0x55555555;
-
-		index[i] = xid | (yid << 1);
+		index[i] = morton3D_SplitBy3bits(xid) | (morton3D_SplitBy3bits(yid) << 1) | (morton3D_SplitBy3bits(zid) << 2);
 	}
 }
 
-export void morton(uniform const int N, uniform const double x[], uniform const double y[],
-			uniform const double xmin, uniform const double ymin, uniform const double ext, uniform int index[], uniform const int ntasks)
+export void morton(uniform const int N, uniform const double x[], uniform const double y[], uniform const double z[],
+			uniform const double xmin, uniform const double ymin, uniform const double zmin, uniform const double ext,
+			uniform int index[], uniform const int ntasks)
 {
-	launch[ntasks] morton_int(N, x, y, xmin, ymin, ext, index);
+	uniform const int myntasks = N > 10000 ? ntasks : 1;
+
+	launch[myntasks] morton_int(N, x, y, z, xmin, ymin, zmin, ext, index);
 }
 
 

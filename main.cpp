@@ -14,8 +14,8 @@
 #include "tree.h"
 #include "kernels.h"	// p2e, e2p, p2p
 
-#define LMAX 15
-
+#define LMAX 10
+#define EXPSIZE (ORDER * (ORDER+3) + 2)
 double tol = 1e-8;
 
 void check(const double * ref, const double * res, const int N)
@@ -51,16 +51,29 @@ void check(const double * ref, const double * res, const int N)
 }
 
 
-void evaluate(const Node* nodes, const double* expansions, const double *xdata, const double *ydata, const double *mdata,
-		const double thetasquared, double * const result, const double xt, const double yt)
+void evaluate(	const Node* nodes,
+				const double *expdata,
+				const double *xdata,
+				const double *ydata,
+				const double *zdata,
+				const double *qdata,
+				const double thetasquared,
+				double * const result,
+				const double xt,
+				const double yt,
+				const double zt)
 {
+	int ne2p = 0, np2p = 0;
+
+	static const int nchildren = 8;
 	enum { BUFSIZE = 16 };
 
-	int stack[LMAX * 3];
+	int stack[LMAX * 8];
 
 	int bufcount = 0;
-	double rzs alignas(32) [BUFSIZE], izs alignas(32) [BUFSIZE], masses alignas(32) [BUFSIZE];
-	const double *rxps[BUFSIZE], *ixps[BUFSIZE];
+	double xrels alignas(32) [BUFSIZE], yrels alignas(32) [BUFSIZE];
+	double zrels alignas(32) [BUFSIZE], qs    alignas(32) [BUFSIZE];
+	const double *exps[BUFSIZE];
 
 	int stackentry = 0, maxentry = 0;
 
@@ -73,36 +86,42 @@ void evaluate(const Node* nodes, const double* expansions, const double *xdata, 
 
 		assert(nodeid < node->child_id || node->child_id == 0);
 
-		const double r2 = (xt - node->xcom)*(xt - node->xcom) + (yt - node->ycom)*(yt - node->ycom);
+		const double xr = xt - node->xcom;
+		const double yr = yt - node->ycom;
+		const double zr = zt - node->zcom;
+		const double r2 = xr*xr + yr*yr + zr*zr;
 
 		if (node->r * node->r < thetasquared * r2)
 		{
-			rzs[bufcount] = xt - node->xcom;
-			izs[bufcount] = yt - node->ycom;
-			masses[bufcount] = node->mass;
-			rxps[bufcount] = expansions + ORDER * (2 * nodeid);
-			ixps[bufcount] = expansions + ORDER * (2 * nodeid + 1);
+			xrels[bufcount] = xr;
+			yrels[bufcount] = yr;
+			zrels[bufcount] = zr;
+			qs[bufcount] = node->Q;
+			exps[bufcount] = expdata + EXPSIZE * nodeid;
 
 			++bufcount;
 
 			if (bufcount == BUFSIZE)
 			{
 				bufcount = 0;
-				*result += ispc::e2p(rzs, izs, BUFSIZE, masses, rxps, ixps);
+				*result += ispc::e2p(xrels, yrels, zrels, BUFSIZE, exps);
+
+				ne2p+=BUFSIZE;
 			}
 		}
 		else
 		{            
-			if (node->child_id == 0)
+			if (node->child_id == 0) // || node->part_end - node->part_start < 100)
 			{
 				const int s = node->part_start;
 				const int e = node->part_end;
 
-				*result += ispc::p2p(xdata + s, ydata + s, mdata + s, e - s, xt, yt);
+				*result += ispc::p2p(xdata + s, ydata + s, zdata +s, qdata + s, e - s, xt, yt, zt);
+				np2p+=e-s;
 			}
 			else
 			{
-				for(int c = 0; c < 4; ++c)
+				for(int c = 0; c < nchildren; ++c)
 					stack[++stackentry] = node->child_id + c;
 
 				maxentry = std::max(maxentry, stackentry);
@@ -111,20 +130,24 @@ void evaluate(const Node* nodes, const double* expansions, const double *xdata, 
 	}
 
 	if (bufcount)
-		*result += ispc::e2p(rzs, izs, bufcount, masses, rxps, ixps);
+	{
+		*result += ispc::e2p(xrels, yrels, zrels, bufcount, exps);
+		ne2p+=bufcount;
+	}
 
+	//printf("Took %d e2p,  %d p2p\n", ne2p, np2p);
 }
 
 
-void potential(double theta, double *xsrc, double *ysrc, double *qsrc, int nsrc,
-			  double *xdst, double *ydst, int ndst, double *pdst)
+void potential(double theta, double *xsrc, double *ysrc, double *zsrc, double *qsrc, int nsrc,
+			  double *xdst, double *ydst, double *zdst, int ndst, double *pdst)
 {
 	static bool maxN = 0;
-	static double *xsorted = nullptr, *ysorted, *qsorted;
+	static double *xsorted = nullptr, *ysorted, *zsorted, *qsorted;
 	static double *expansions;
 	static Node   *nodes;
 
-	const int k = 128;	// leaf capacity
+	const int k = 1536;	// leaf capacity
 	int maxnodes;
 
 	if (maxN < nsrc)
@@ -133,6 +156,7 @@ void potential(double theta, double *xsrc, double *ysrc, double *qsrc, int nsrc,
 		{
 			free(xsorted);
 			free(ysorted);
+			free(zsorted);
 			free(qsorted);
 			free(nodes);
 			free(expansions);
@@ -140,125 +164,131 @@ void potential(double theta, double *xsrc, double *ysrc, double *qsrc, int nsrc,
 
 		posix_memalign((void **)&xsorted, 32, sizeof(double) * nsrc);
 		posix_memalign((void **)&ysorted, 32, sizeof(double) * nsrc);
+		posix_memalign((void **)&zsorted, 32, sizeof(double) * nsrc);
 		posix_memalign((void **)&qsorted, 32, sizeof(double) * nsrc);
 
-		maxnodes = (nsrc + k - 1) / k * 10;
+		maxnodes = (nsrc + k - 1) / k * 20;
 		posix_memalign((void **)&nodes, 32, sizeof(Node) * maxnodes);
-		posix_memalign((void **)&expansions, 32, sizeof(double) * 2 * ORDER * maxnodes);
+		posix_memalign((void **)&expansions, 32, sizeof(double) * EXPSIZE * maxnodes);
+		maxN = nsrc;
 	}
 
-	build(xsrc, ysrc, qsrc, nsrc, k, xsorted, ysorted, qsorted, nodes, expansions);
+	build(xsrc, ysrc, zsrc, qsrc, nsrc, k, maxnodes, xsorted, ysorted, zsorted, qsorted, nodes, expansions);
 
 	Timer tm;
 	tm.start();
 
 	#pragma omp parallel for schedule(static,1)
 	for(int i = 0; i < ndst; ++i)
-		evaluate(nodes, expansions, xsorted, ysorted, qsorted,
-				theta*theta, pdst + i, xdst[i], ydst[i]);
+		evaluate(nodes, expansions, xsorted, ysorted, zsorted, qsorted,
+				theta*theta, pdst + i, xdst[i], ydst[i], zdst[i]);
 	double t = tm.elapsed();
 	printf("Evaluation took %.3f ms (%.3f us per target)\n", t*1e-6, t*1e-3 / ndst);
 }
 
-void test(double theta, double tol, FILE * f = NULL, bool verify = true)
+void test(double theta, double tol, bool verify = true)
 {
-	int NSRC;
-	fread(&NSRC, sizeof(int), 1, f);
+	const int nsrc = 2097152;
+	double *xsrc, *ysrc, *zsrc, *qsrc;
 
-	double *xsrc, *ysrc, *sources;
-	posix_memalign((void **)&xsrc, 32, sizeof(double) * NSRC);
-	posix_memalign((void **)&ysrc, 32, sizeof(double) * NSRC);
-	posix_memalign((void **)&sources, 32, sizeof(double) * NSRC);
+	posix_memalign((void **)&xsrc, 32, sizeof(double) * nsrc);
+	posix_memalign((void **)&ysrc, 32, sizeof(double) * nsrc);
+	posix_memalign((void **)&zsrc, 32, sizeof(double) * nsrc);
+	posix_memalign((void **)&qsrc, 32, sizeof(double) * nsrc);
 
-	fread(xsrc, sizeof(double), NSRC, f);
-	fread(ysrc, sizeof(double), NSRC, f);
-	fread(sources, sizeof(double), NSRC, f);
+	for (int i=0; i<nsrc; i++)
+	{
+		xsrc[i] = drand48() - 0.5;
+		ysrc[i] = drand48() - 0.5;
+		zsrc[i] = drand48() - 0.5;
 
-	int NDST;
-	fread(&NDST, sizeof(int), 1, f);
+		qsrc[i] = 0.1*(drand48() - 0.5);
+	}
 
-	double *xdst, *ydst, *xref, *yref;
-	posix_memalign((void **)&xdst, 32, sizeof(double) * NDST);
-	posix_memalign((void **)&ydst, 32, sizeof(double) * NDST);
-	posix_memalign((void **)&xref, 32, sizeof(double) * NDST);
-	posix_memalign((void **)&yref, 32, sizeof(double) * NDST);
 
-	fread(xdst, sizeof(double), NDST, f);
-	fread(ydst, sizeof(double), NDST, f);
-	fread(xref, sizeof(double), NDST, f);
+	int ndst = 189717;
+	double *xdst, *ydst, *zdst, *potentials;
+	posix_memalign((void **)&xdst,   32, sizeof(double) * ndst);
+	posix_memalign((void **)&ydst,   32, sizeof(double) * ndst);
+	posix_memalign((void **)&zdst,   32, sizeof(double) * ndst);
+	posix_memalign((void **)&potentials, 32, sizeof(double) * ndst);
+
+	for (int i=0; i<ndst; i++)
+	{
+		xdst[i] = drand48() - 0.5;
+		ydst[i] = drand48() - 0.5;
+		zdst[i] = drand48() - 0.5;
+	}
 
 	const double eps = std::numeric_limits<double>::epsilon() * 10;
 
-	double *xtargets, *ytargets;
-	posix_memalign((void **)&xtargets, 32, sizeof(double) * NDST);
-	posix_memalign((void **)&ytargets, 32, sizeof(double) * NDST);
 
-	printf("Testing %s with %d sources and %d targets (theta %.3e)...\n", "POTENTIAL", NSRC, NDST, theta);
+	printf("Testing %s with %d sources and %d targets (theta %.3e)...\n", "POTENTIAL", nsrc, ndst, theta);
 
 	Timer tm;
 	tm.start();
-	for (int n=0; n<10; n++)
-	potential(theta, xsrc, ysrc, sources, NSRC, xdst, ydst, NDST, xtargets);
+	for (int n=0; n<1; n++)
+		potential(theta, xsrc, ysrc, zsrc, qsrc, nsrc, xdst, ydst, zdst, ndst, potentials);
 	const double tpot = tm.elapsed();
 
-	printf("\x1b[94msolved in %.2f ms\x1b[0m\n", tpot * 1e-6 / 10);
+	printf("\x1b[94msolved in %.2f ms\x1b[0m\n", tpot * 1e-6);
 
 	if (verify)
 	{
-		const int OFFSET = 7;
+		double *pref;
+		posix_memalign((void **)&pref, 32, sizeof(double) * ndst);
+
+		const int OFFSET = 0;
 		const int JUMP = 435;
 
 #pragma omp parallel for
-		for(int i = OFFSET; i < NDST; i += JUMP)
+		for(int i = OFFSET; i < ndst; i += JUMP)
 		{
 			const double xd = xdst[i];
 			const double yd = ydst[i];
+			const double zd = zdst[i];
 
 			double s = 0;
 
-			for(int j = 0; j < NSRC; ++j)
+			for(int j = 0; j < nsrc; ++j)
 			{
 				const double xr = xd - xsrc[j];
 				const double yr = yd - ysrc[j];
-				const double r2 = xr * xr + yr * yr;
-				const double f  = fabs(r2) > eps;
-				s += 0.5 * f * log(r2 + eps) * sources[j];
+				const double zr = zd - zsrc[j];
+				const double r2 = xr*xr + yr*yr + zr*zr;
+				s += (fabs(r2) > eps) ? qsrc[j] / sqrt(r2) : 0;
 			}
-			xref[i] = s;
+			pref[i] = s;
 		}
 
-		std::vector<double> a, b, c, d;
+		std::vector<double> a, b;
 
-		for(int i = OFFSET; i < NDST; i += JUMP)
+		for(int i = OFFSET; i < ndst; i += JUMP)
 		{
-			a.push_back(xref[i]);
-			b.push_back(xtargets[i]);
-			c.push_back(yref[i]);
-			d.push_back(ytargets[i]);
+			a.push_back(pref[i]);
+			b.push_back(potentials[i]);
 		}
 
 		check(&a[0], &b[0], a.size());
+		free(pref);
 	}
 
 	free(xdst);
 	free(ydst);
-
-	free(xtargets);
-	free(ytargets);
-
-	free(xref);
-	free(yref);
+	free(zdst);
+	free(potentials);
 
 	free(xsrc);
 	free(ysrc);
-	free(sources);
+	free(zsrc);
+	free(qsrc);
 
 	printf("TEST PASSED.\n");
 }
 
 int main(int argc, char ** argv)
 {
-	double theta = 0.5;
+	double theta = 0.35;
 	bool verify = true;
 
 	if (argc > 1)
@@ -270,24 +300,7 @@ int main(int argc, char ** argv)
 	if (argc > 3)
 		verify = strcmp(argv[3], "profile") != 0;
 
-	char filename[256];
-//	strcpy(filename, "testDiego/diegoBinaryN400");
-//	strcpy(filename, "testDiego/diegoBinaryN2000");
-	strcpy(filename, "testDiego/diegoBinaryN12000");
-
-	if (access(filename, R_OK) == -1)
-	{
-		printf("WARNING: reference file <%s> not found.\n", filename);
-		return 1;
-	}
-	else
-		printf("reading from <%s> ...\n", filename);
-
-	FILE * fin = fopen(filename, "r");
-
-	assert(fin && sizeof(double) == sizeof(double));
-
-	test(theta, tol, fin, verify);
+	test(theta, tol, verify);
 
 	return 0;
 }

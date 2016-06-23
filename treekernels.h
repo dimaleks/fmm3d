@@ -34,9 +34,9 @@ namespace ispc { /* namespace */
 #if defined(__cplusplus) && (! defined(__ISPC_NO_EXTERN_C) || !__ISPC_NO_EXTERN_C )
 extern "C" {
 #endif // __cplusplus
-    extern void minmax(const int32_t N, const double * x, const double * y, double &xmin, double &xmax, double &ymin, double &ymax);
-    extern void morton(const int32_t N, const double * x, const double * y, const double xmin, const double ymin, const double ext, int32_t * index, const int32_t ntasks);
-    extern void node_setup(const double * xsources, const double * ysources, const double * msources, const int32_t nsources, double &mass, double &xcom, double &ycom, double &radius, double &weight);
+    extern void minmax(const int32_t N, const double * x, const double * y, const double * z, double &xmin, double &xmax, double &ymin, double &ymax, double &zmin, double &zmax);
+    extern void morton(const int32_t N, const double * x, const double * y, const double * z, const double xmin, const double ymin, const double zmin, const double ext, int32_t * index, const int32_t ntasks);
+    extern void node_setup(const double * xs, const double * ys, const double * zs, const double * qs, const int32_t n, double &Q, double &xcom, double &ycom, double &zcom, double &radius, double &weight);
 #if defined(__cplusplus) && (! defined(__ISPC_NO_EXTERN_C) || !__ISPC_NO_EXTERN_C )
 } /* end extern C */
 #endif // __cplusplus

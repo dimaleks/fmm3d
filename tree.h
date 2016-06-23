@@ -14,7 +14,7 @@ struct Node
 {
 	int part_start, part_end;
 	int child_id;
-	double mass, xcom, ycom, r, w;
+	double Q, xcom, ycom, zcom, r, w;
 	int level, morton_id;
 
 	//int parent;
@@ -29,7 +29,16 @@ struct Node
 	}
 };
 
-void build(const double* const x, const double* const y, const double* mass, const int n, const int k,
-	double* xsorted, double* ysorted, double* mass_sorted, Node *nodes, double *expansions);
+void build(	const double* __restrict const xs,
+			const double* __restrict const ys,
+			const double* __restrict const zs,
+			const double* __restrict const qs,
+			const int n, const int k, const int maxnodes,
+			double* __restrict xsorted,
+			double* __restrict ysorted,
+			double* __restrict zsorted,
+			double* __restrict qsorted,
+			Node*   __restrict nodes,
+			double* __restrict expansions);
 
 

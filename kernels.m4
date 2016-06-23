@@ -1,163 +1,180 @@
 include(unroll.m4)
+#include "harmonics.h"
+
+divert(-1)
+define(`resign', `ifelse(eval($3 >= 0), `1', `ifelse(eval($3 % 2), `0', `', `$1 = -$1;')', `ifelse(eval($3 % 2), `0', `$2 = -$2;', `')')')dnl
+
+define(`sincos', `ifelse(eval($1 % 2), `0', `sin', `cos')')dnl
+define(`cossin', `ifelse(eval($1 % 2), `0', `cos', `sin')')dnl
+divert(0)dnl
 
 #define EPS (10 * __DBL_EPSILON__)
 
 export void p2e(
-		uniform const   double xsources[],
-		uniform const   double ysources[],
-		uniform const   double qsources[],
-		uniform const   int nsources,
-		uniform const   double xcom,
-		uniform const   double ycom,
-		uniform double  rexpansions[],
-		uniform double  iexpansions[])
+      uniform const   double xsrc[],
+      uniform const   double ysrc[],
+      uniform const   double zsrc[],
+      uniform const   double qsrc[],
+      uniform const   int nsrc,
+      uniform const   double xcom,
+      uniform const   double ycom,
+      uniform const   double zcom,
+      uniform double  expansion[])
 {
-	double re0 = 0;
-	double substr(echo(LUNROLL(i, 1, ORDER, `, 're``''i``'' = 0)), `1');
-	double substr(echo(LUNROLL(i, 1, ORDER, `, 'ie``''i``'' = 0)), `1');
+ 
+  LUNROLL(n, 0, ORDER-1, `double substr(echo(LUNROLL(m, 0, n, `, Mre_`'n`'_`'m = 0');), `1')'
+  )
+  LUNROLL(n, 0, ORDER-1, `double substr(echo(LUNROLL(m, 0, n, `, Mim_`'n`'_`'m = 0');), `1')'
+  )
 
-	foreach (n=0 ... nsources)
-	{
-		const double rz0 = xsources[n] - xcom;
-		const double iz0 = ysources[n] - ycom;
-		const double q0  = qsources[n];
-		double rz = 1;
-		double iz = 0;
+  foreach (k=0 ... nsrc)
+  {
+    const double x = xsrc[k] - xcom;
+    const double y = ysrc[k] - ycom;
+    const double z = zsrc[k] - zcom;
+    const double q = qsrc[k];
+    
+    // compute 1/rho = rho_1 and rho = rho^2 * rho^-1
+    const double xxyy  = x*x + y*y;
+    const double rho2  = xxyy + z*z;
+    const double rho_1 = rsqrt(rho2);
+    const double rho   = 1.0 / rho_1;
+    
+    const double costheta = z * rho_1;
+    const double sintheta = sqrt(1 - costheta*costheta);
+    double factor = q;    
+    
+    // phi = atan2(y, x);
+    // cos_m = cos(n * phi);
+    const double phiMag_1 = rsqrt(xxyy);
+    double mag_1 = 1;
+    double phi_x = 1;
+    double phi_y = 0;
+    double tmp;
+    
+    LUNROLL(m, 0, ORDER-1, `const double cosphi_`'m = phi_x * mag_1;
+    const double sinphi_`'m = phi_y * mag_1;
+    tmp = phi_x*x - phi_y*y;
+    phi_y = phi_x*y + phi_y*x;
+    phi_x = tmp;
+    mag_1 *= phiMag_1;
+    
+    ')
+  	
+    Mre_0_0 += factor;
+    factor *= rho;
+    
+    LUNROLL(n, 1, ORDER-1, `LUNROLL(m, 0, n, `const double tmp_`'n`'_`'m = factor * Y_`'n`'_`'m`'(sintheta, costheta);
+    Mre_`'n`'_`'m`' += tmp_`'n`'_`'m * cossin(m)phi_`'m;
+    Mim_`'n`'_`'m`' += tmp_`'n`'_`'m * sincos(m)phi_`'m;
+    
+    ')factor *= rho;
+    
+    ')
+  }
 
-		double rtmp, itmp;
-		LUNROLL(i, 1, ORDER,
-		`const double q`'i = q0 * (1.0 / i);
-		rtmp = rz * rz0 - iz * iz0;
-		itmp = rz * iz0 + iz * rz0;
-		rz = rtmp;
-		iz = itmp;
-		re`'i -= q`'i * rz;
-		ie`'i -= q`'i * iz;
-
-		')
-	}
-
-	LUNROLL(i, 1, ORDER,
-	`rexpansions[decr(i)] = reduce_add(re`'i`');
-	iexpansions[decr(i)] = reduce_add(ie`'i`');
-	')
-}
-
-export uniform double e2p(
-		uniform const double xrel[],
-		uniform const double yrel[],
-		uniform const int    nexps,
-		uniform const double Q[],
-		uniform const double * uniform re[],
-		uniform const double * uniform ie[])
-{
-  double pot = 0;
-  
-  foreach(n=0...nexps)
-	{
-		const double rz0 = xrel[n];
-		const double iz0 = yrel[n];
-
-		const double Iz0I2 = rz0*rz0 + iz0*iz0;
-		const double Iinvz0I = 1.0 / Iz0I2;
-		const double rinvz0 =  rz0 * Iinvz0I;
-		const double iinvz0 = -iz0 * Iinvz0I;
-
-		pot += 0.5 * Q[n] * log(Iz0I2);
-		double rz = 1;
-		double iz = 0;
-
-		double rtmp, itmp;
-		LUNROLL(i, 1, ORDER,
-		`rtmp = rz * rinvz0 - iz * iinvz0;
-		itmp = rz * iinvz0 + iz * rinvz0;
-		rz = rtmp;
-		iz = itmp;
-		pot += rz * re[n][decr(i)] - iz * ie[n][decr(i)];'
-		)
-	}
-	
-	return reduce_add(pot);
+  LUNROLL(n, 0, ORDER-1, `LUNROLL(m, 0, n, `expansion[eval((n-1) * (n+2) + 2 + m)] = reduce_add(Mre_`'n`'_`'m`');
+  ')LUNROLL(m, 0, n, `expansion[eval((n-1) * (n+2) + 3 + n + m)] = reduce_add(Mim_`'n`'_`'m`');
+  ')
+  ')
 }
 
 export uniform double p2p(
-   uniform const double uniform xsrc[],
-   uniform const double uniform ysrc[],
-   uniform const double uniform qsrc[],
-   uniform const int nsrc,
-   uniform const double xt,
-   uniform const double yt)
+      uniform const double xsrc[],
+      uniform const double ysrc[],
+      uniform const double zsrc[],
+      uniform const double qsrc[],
+      uniform const int    nsrc,
+      uniform const double xdst,
+      uniform const double ydst,
+      uniform const double zdst)
 {
-  double pot = 0;
+  
+  double s = 0;
   foreach (i=0...nsrc)
   {
-    const double xr = xt - xsrc[i];
-    const double yr = yt - ysrc[i];
+    const double xr = xdst - xsrc[i];
+    const double yr = ydst - ysrc[i];
+    const double zr = zdst - zsrc[i];
     
-    const double r2 = xr*xr + yr*yr;
-    const double f  = abs(r2) > EPS;
+    const double r2 = xr*xr + yr*yr + zr*zr;
+    s += (abs(r2) > EPS) ? qsrc[i] / sqrt(r2) : 0;
+  }
+  
+  return reduce_add(s);
+}
 
-    pot += 0.5 * f * log((r2 + EPS)) * qsrc[i];
+export uniform double e2p(
+      uniform const double xrel[],
+      uniform const double yrel[],
+      uniform const double zrel[],
+      uniform const int    nexps,
+      uniform const double * uniform exps[])
+{
+  double pot = 0;
+  
+  foreach(k=0...nexps)
+  {
+    const double x = xrel[k];
+    const double y = yrel[k];
+    const double z = zrel[k];
+    
+    // compute 1/rho
+    const double xxyy  = x*x + y*y;
+    const double rho2  = xxyy + z*z;
+    const double rho_1 = rsqrt(rho2);
+    const double rho   = 1.0 / rho_1;
+    
+    const double costheta = z * rho_1;
+    const double sintheta = sqrt(1 - costheta*costheta);
+    
+    // phi = atan2(y, x);
+    // cos_m = cos(n * phi);
+    const double phiMag_1 = rsqrt(xxyy);
+    double mag_1 = 1;
+    double phi_x = 1;
+    double phi_y = 0;
+    double tmp;
+    
+    LUNROLL(m, 0, ORDER-1, `const double cosphi_`'m = phi_x * mag_1;
+    const double sinphi_`'m = phi_y * mag_1;
+    tmp = phi_x*x - phi_y*y;
+    phi_y = phi_x*y + phi_y*x;
+    phi_x = tmp;
+    mag_1 *= phiMag_1;
+    
+    ')
+        
+    double factor = rho_1;
+    {
+      // const double Y = Y_0_0(sintheta, costheta);
+      // this is just one!
+      pot += factor * exps[k][0];
+    }
+    factor *= 2*rho_1;
+    
+    LUNROLL(n, 1, ORDER-1, `{
+      const double Y = Y_`'n`'_0(sintheta, costheta);
+      pot += 0.5 * factor * Y * exps[k][eval((n-1) * (n+2) + 2)];
+    }
+    
+    LUNROLL(m, 1, n, `{
+      const double Y = Y_`'n`'_`'m`'(sintheta, costheta);
+      
+      const double reY = Y * cossin(m)phi_`'m`';
+      const double imY = Y * sincos(m)phi_`'m`';
+      
+      const double reM =  exps[k][eval((n-1) * (n+2) + 2 + m)];
+      const double imM = -exps[k][eval((n-1) * (n+2) + 3 + n + m)];
+            
+      pot += factor * (reM * reY - imM * imY);
+    }       
+    ')factor *= rho_1;
+    
+    ')
   }
   
   return reduce_add(pot);
 }
 
-export void e2e(
-            uniform const double x0s[],
-            uniform const double y0s[],
-            uniform const double masses[],
-            uniform const double * uniform vrxps[],
-            uniform const double * uniform vixps[],
-            uniform double rdstxp[],
-            uniform double idstxp[])
-{
-  
-  if (programIndex >= 4) return;
-  
-  const uniform double * rxps = vrxps[programIndex];
-  const uniform double * ixps = vixps[programIndex];
-
-  const double x0 = x0s[programIndex];
-  const double y0 = y0s[programIndex];
-  const double mass = masses[programIndex];
-
-  const double r2z0 = x0 * x0 + y0 * y0;
-  const double rinvz_1 =  x0 / r2z0;
-  const double iinvz_1 = -y0 / r2z0;
- dnl
- dnl
- LUNROLL(j, 1, eval(ORDER),`
-   ifelse(j, 1, , `
-   const double TMP(rinvz, j) = TMP(rinvz, eval(j - 1)) * rinvz_1 - TMP(iinvz, eval(j - 1)) * iinvz_1;
-   const double TMP(iinvz, j) = TMP(rinvz, eval(j - 1)) * iinvz_1 + TMP(iinvz, eval(j - 1)) * rinvz_1;')
-
-   const double TMP(rcoeff, j) = rxps[eval(j - 1)] * TMP(rinvz, j) - ixps[eval(j - 1)] * TMP(iinvz, j);
-   const double TMP(icoeff, j) = rxps[eval(j - 1)] * TMP(iinvz, j) + ixps[eval(j - 1)] * TMP(rinvz, j);
-   ')
-
-  LUNROLL(l, 1, eval(ORDER),`
-  {
-    const double TMP(prefac, l) = ifelse(l, 1, `- mass',`-mass * (1.0 / l)');
-  
-    pushdef(`BINFAC', `BINOMIAL(eval(l - 1), eval(k - 1)).f')
-    const double TMP(rtmp, l) = TMP(prefac, l) LUNROLL(k, 1, l,`
-    + TMP(rcoeff, k) ifelse(BINFAC,1.f,,`* BINFAC')');
-  
-    const double TMP(itmp, l) = LUNROLL(k, 1, l,`
-    ifelse(k,1,,+)  TMP(icoeff, k) ifelse(BINFAC,1.f,,`* BINFAC')');
-    popdef(`BINFAC')dnl
-  
-    const double TMP(invz2, l) = TMP(rinvz, l) * TMP(rinvz, l) + TMP(iinvz, l) * TMP(iinvz, l);
-    const double TMP(invinvz2, l) = TMP(invz2, l) ? 1 / TMP(invz2, l) : 0;
-    const double TMP(rz, l) = TMP(rinvz, l) * TMP(invinvz2, l);
-    const double TMP(iz, l) = - TMP(iinvz, l) * TMP(invinvz2, l);
-    
-    const double rpartial = TMP(rtmp, l) * TMP(rz, l) - TMP(itmp, l) * TMP(iz, l);
-    const double ipartial = TMP(rtmp, l) * TMP(iz, l) + TMP(itmp, l) * TMP(rz, l);
-    
-    rdstxp[eval(l - 1)] = reduce_add(rpartial);
-    idstxp[eval(l - 1)] = reduce_add(ipartial);
-  }')
-}
 

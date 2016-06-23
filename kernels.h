@@ -34,10 +34,9 @@ namespace ispc { /* namespace */
 #if defined(__cplusplus) && (! defined(__ISPC_NO_EXTERN_C) || !__ISPC_NO_EXTERN_C )
 extern "C" {
 #endif // __cplusplus
-    extern void e2e(const double * x0s, const double * y0s, const double * masses, const double *  * vrxps, const double *  * vixps, double * rdstxp, double * idstxp);
-    extern double e2p(const double * xrel, const double * yrel, const int32_t nexps, const double * Q, const double *  * re, const double *  * ie);
-    extern void p2e(const double * xsources, const double * ysources, const double * qsources, const int32_t nsources, const double xcom, const double ycom, double * rexpansions, double * iexpansions);
-    extern double p2p(const double * xsrc, const double * ysrc, const double * qsrc, const int32_t nsrc, const double xt, const double yt);
+    extern double e2p(const double * xrel, const double * yrel, const double * zrel, const int32_t nexps, const double *  * exps);
+    extern void p2e(const double * xsrc, const double * ysrc, const double * zsrc, const double * qsrc, const int32_t nsrc, const double xcom, const double ycom, const double zcom, double * expansion);
+    extern double p2p(const double * xsrc, const double * ysrc, const double * zsrc, const double * qsrc, const int32_t nsrc, const double xdst, const double ydst, const double zdst);
 #if defined(__cplusplus) && (! defined(__ISPC_NO_EXTERN_C) || !__ISPC_NO_EXTERN_C )
 } /* end extern C */
 #endif // __cplusplus
