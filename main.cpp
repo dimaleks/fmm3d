@@ -12,10 +12,11 @@
 
 #include "timer.h"
 #include "tree.h"
-#include "kernels.h"	// p2e, e2p, p2p
+#include "e2p.h"
+#include "p2p.h"
 
 #define LMAX 10
-#define EXPSIZE (ORDER * (ORDER+3) + 2)
+#define EXPSIZE  (ORDER * (ORDER+1))
 double tol = 1e-8;
 
 void check(const double * ref, const double * res, const int N)
@@ -147,7 +148,7 @@ void potential(double theta, double *xsrc, double *ysrc, double *zsrc, double *q
 	static double *expansions;
 	static Node   *nodes;
 
-	const int k = 1536;	// leaf capacity
+	const int k = 0.01*1536;	// leaf capacity
 	int maxnodes;
 
 	if (maxN < nsrc)
@@ -188,7 +189,7 @@ void potential(double theta, double *xsrc, double *ysrc, double *zsrc, double *q
 
 void test(double theta, double tol, bool verify = true)
 {
-	const int nsrc = 2097152;
+	const int nsrc = 2000000;
 	double *xsrc, *ysrc, *zsrc, *qsrc;
 
 	posix_memalign((void **)&xsrc, 32, sizeof(double) * nsrc);
@@ -206,7 +207,7 @@ void test(double theta, double tol, bool verify = true)
 	}
 
 
-	int ndst = 189717;
+	int ndst = 1000;
 	double *xdst, *ydst, *zdst, *potentials;
 	posix_memalign((void **)&xdst,   32, sizeof(double) * ndst);
 	posix_memalign((void **)&ydst,   32, sizeof(double) * ndst);

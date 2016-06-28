@@ -1,5 +1,4 @@
 order ?= 12
-bmi2 ?= 0
 ORDERFLAG = -DORDER=$(order)
 
 CXXFLAGS +=-g -fopenmp -fstrict-aliasing -march=native -mtune=native -O3 -std=c++11 -m64
@@ -18,31 +17,47 @@ ifeq ($(CXX),$(filter $(CXX),icc icpc))
 	LINKFLAGS+=-L$(TBBPATH)/lib/ -ltbb -Wl,-rpath,$(TBBPATH)/lib/
 endif
 
-ifeq ($(bmi2), 1)
-	CXXFLAGS+=-D_BMI2_
-endif
+CXXFLAGS += -MP -MD
 
+ISPC_FROM_M4_FILES = e2p.ispc p2e.ispc e2e.ispc
+ISPC_FILES = treekernels.ispc p2p.ispc
 CPP_FILES = main.cpp tree.cpp treehelper.cpp tasksys.cpp
-OBJ_FILES = main.o tree.o treehelper.o treekernels.ispco kernels.ispco tasksys.o
+
+ISPC_OBJ_FILES = $(patsubst %.ispc,%.ispco,$(ISPC_FILES) $(ISPC_FROM_M4_FILES))
+ISPC_H_FILES   = $(patsubst %.ispco,%.h,$(ISPC_OBJ_FILES))
+CPP_OBJ_FILES  = $(patsubst %.cpp,%.o,$(CPP_FILES))
 
 all: fmm
 
-fmm: $(OBJ_FILES)
+ORDER: always_build
+	@echo $(order) > $@.tmp
+	@diff -q $@ $@.tmp &>/dev/null || cp $@.tmp $@
+	@rm -f $@.tmp
+
+fmm: $(ISPC_OBJ_FILES) $(CPP_OBJ_FILES)
 	$(CXX) $(LINKFLAGS) $^ -o $@ 
 	
-%.o: %.cpp
+%.o: %.cpp ORDER
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-%.ispco: %.ispc
-	$(ISPC) $(ISPCFLAGS) $< -o $@
+%.ispco: %.ispc ORDER
+	$(ISPC) $(ISPCFLAGS) $< -o $@ -MMM $(patsubst %.ispc,%.dtmp,$<) -h $(patsubst %.ispc,%.h,$<)
+	@echo "$@: \\" > $(patsubst %.ispc,%.d,$<)
+	@perl -n -e 'chop; print $$_, " "' $(patsubst %.ispc,%.dtmp,$<) >> $(patsubst %.ispc,%.d,$<)
+	@echo "" >> $(patsubst %.ispc,%.d,$<)
+	@rm -f $(patsubst %.ispc,%.dtmp,$<)
 
-kernels.ispc: kernels.m4
-	m4 $(ORDERFLAG) kernels.m4 > kernels.ispc
+%.ispc: %.m4 ORDER
+	m4 $(ORDERFLAG) $< > $@
 
 clean:
-	rm -f *.o *.d kernels.ispc *.ispco kernels.cpp fmm
+	rm -f *.o *.d $(ISPC_FROM_M4_FILES) *.ispco fmm
 	
 
 ifneq "$(MAKECMDGOALS)" "clean"
 -include $(notdir $(patsubst %.cpp,%.d,$(CPP_FILES)))
+-include $(notdir $(patsubst %.ispco,%.d,$(ISPC_OBJ_FILES)))
 endif
+
+.PRECIOUS: %.o %.ispco %.ispc
+.PHONY: always_build clean

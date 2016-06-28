@@ -12,11 +12,12 @@
 #include <limits>
 
 #include "tree.h"
-#include "kernels.h"
+#include "p2e.h"
+#include "e2e.h"
 
 #include <omp.h>
 
-#define EXPSIZE  (ORDER * (ORDER+3) + 2)
+#define EXPSIZE  (ORDER * (ORDER+1))
 
 class TreeBuilder
 {
@@ -140,15 +141,24 @@ void TreeBuilder::build_tree(const int nodeid)
 		node_setup(xdata + s, ydata + s, zdata + s, qdata + s, e - s,
 							node->Q, node->xcom, node->ycom, node->zcom, node->r, node->w);
 
-		ispc::p2e(xdata + s, ydata + s, zdata + s, qdata + s, e - s,
-				  node->xcom, node->ycom, node->zcom, expansions + nodeid*EXPSIZE);
-//		for (int k=0; k<ORDER; k++)
-//			printf("%e  ", *(expansions + 2*nodeid*ORDER + k));
-//		printf("\n");
+//		ispc::p2e(xdata + s, ydata + s, zdata + s, qdata + s, e - s,
+//				  node->xcom, node->ycom, node->zcom, expansions + nodeid*EXPSIZE);
+//
+//		double tmpee alignas(32) [EXPSIZE];
+		ispc::e2e(xrels, yrels, zrels, exps, expansions + nodeid*EXPSIZE);
 
-		//ispc::e2e(xrels, yrels, zrels, qs, exps, expansions + nodeid*ORDER*ORDER);
-//		for (int k=0; k<ORDER; k++)
-//			printf("%e  ", *(expansions + 2*nodeid*ORDER + k));
+//		int n=0, add = 2, cur=0;
+//		for (int k=0; k<EXPSIZE; k++)
+//		{
+//			if (k == cur)
+//			{
+//				printf("\n%d:\n", n);
+//				cur+=add;
+//				n++;
+//				add+=2;
+//			}
+//			printf("%e   vs %e\n", *(expansions + nodeid*EXPSIZE + k), tmpee[k]);
+//		}
 //		printf("\n\n\n");
 	}
 }
