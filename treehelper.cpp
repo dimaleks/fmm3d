@@ -15,11 +15,11 @@
 #define LMAX 10
 
 void extent(const int N,
-			const double* __restrict const x,
-			const double* __restrict const y,
-			const double* __restrict const z,
-			double& xmin, double& ymin, double& zmin,
-			double& ext)
+		const double* __restrict const x,
+		const double* __restrict const y,
+		const double* __restrict const z,
+		double& xmin, double& ymin, double& zmin,
+		double& ext)
 {
 	const int nthreads = omp_get_max_threads();
 
@@ -39,7 +39,7 @@ void extent(const int N,
 			const int tid = omp_get_thread_num();
 			const int myn = std::min(chunksize, N - tid*chunksize);
 			ispc::minmax(myn, x + tid*chunksize, y + tid*chunksize, z + tid*chunksize,
-						xs[tid*2], xs[tid*2 + 1], ys[tid*2], ys[tid*2 + 1], zs[tid*2], zs[tid*2 + 1]);
+					xs[tid*2], xs[tid*2 + 1], ys[tid*2], ys[tid*2 + 1], zs[tid*2], zs[tid*2 + 1]);
 		}
 
 		ispc::minmax(nthreads*2, xs, ys, zs, xmin, xmax, ymin, ymax, zmin, zmax);
@@ -58,7 +58,7 @@ void extent(const int N,
 }
 
 void morton(const int N, const double* __restrict const x, const double* __restrict const y, const double* __restrict const z,
-			const double xmin, const double ymin, const double zmin, const double ext, int* __restrict index)
+		const double xmin, const double ymin, const double zmin, const double ext, int* __restrict index)
 {
 	ispc::morton(N, x, y, z, xmin, ymin, zmin, ext, index, omp_get_max_threads());
 }
@@ -95,54 +95,60 @@ void sort(const int N, int* __restrict index, int* __restrict keys)
 }
 
 void reorder(const int N,
-			 const int* __restrict const keys,
-			 const double* __restrict const x,
-			 const double* __restrict const y,
-			 const double* __restrict const z,
-			 const double* __restrict const q,
-			 double* __restrict xsorted,
-			 double* __restrict ysorted,
-			 double* __restrict zsorted,
-			 double* __restrict qsorted)
+		const int* __restrict const keys,
+		const double* __restrict const x,
+		const double* __restrict const y,
+		const double* __restrict const z,
+		const double* __restrict const q,
+		double* __restrict xsorted,
+		double* __restrict ysorted,
+		double* __restrict zsorted,
+		double* __restrict qsorted)
 {
 #ifdef __INTEL_COMPILER
-	  __assume_aligned(x, 32);
-	  __assume_aligned(y, 32);
-	  __assume_aligned(z, 32);
-	  __assume_aligned(q, 32);
+	__assume_aligned(x, 32);
+	__assume_aligned(y, 32);
+	__assume_aligned(z, 32);
+	__assume_aligned(q, 32);
 
-	  __assume_aligned(xsorted, 32);
-	  __assume_aligned(ysorted, 32);
-	  __assume_aligned(zsorted, 32);
-	  __assume_aligned(qsorted, 32);
+	__assume_aligned(xsorted, 32);
+	__assume_aligned(ysorted, 32);
+	__assume_aligned(zsorted, 32);
+	__assume_aligned(qsorted, 32);
 
-	  __assume_aligned(keys, 32);
+	__assume_aligned(keys, 32);
 #endif
 
-	#pragma omp parallel for
+#pragma omp parallel for
 	for(int i = 0; i < N; ++i)
-	{
-		const int entry = keys[i];
+		xsorted[i] = x[keys[i]];
 
-		xsorted[i] = x[entry];
-		ysorted[i] = y[entry];
-		zsorted[i] = z[entry];
-		qsorted[i] = q[entry];
-	}
+#pragma omp parallel for
+	for(int i = 0; i < N; ++i)
+		ysorted[i] = y[keys[i]];
+
+#pragma omp parallel for
+	for(int i = 0; i < N; ++i)
+		zsorted[i] = z[keys[i]];
+
+#pragma omp parallel for
+	for(int i = 0; i < N; ++i)
+		qsorted[i] = q[keys[i]];
 }
 
 
 void node_setup(const double xsrc[],
-				const double ysrc[],
-				const double zsrc[],
-				const double qsrc[],
-				const int nsrc,
-				double& Q,
-				double& xcom,
-				double& ycom,
-				double& zcom,
-				double& radius,
-				double& w)
+		const double ysrc[],
+		const double zsrc[],
+		const double qsrc[],
+		const int nsrc,
+		double& Q,
+		double& xcom,
+		double& ycom,
+		double& zcom,
+		double& radius,
+		double& w)
 {
 	ispc::node_setup(xsrc, ysrc, zsrc, qsrc, nsrc, Q, xcom, ycom, zcom, radius, w);
 }
+

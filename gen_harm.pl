@@ -13,7 +13,7 @@ my $code;
 $code =~ s/int/double/g;
 $code =~ s/func\s+(\d+)\s+(\d+).*?double\s+f/inline double Y_$1_$2/gs;
 $code =~ s/\(double\s+(c|s)t\)/(double st, double ct)/gs;
-$code =~ s/\.(\d+)e(\d+)(\W)/.$1d$2$3/gs;
+#$code =~ s/\.(\d+)e(\d+)(\W)/.$1d$2$3/gs;
 $code =~ s/fabs//gs;
 
 while ($code =~ /inline\s+double\s+?(Y_(\d+)_\w*?(\d+).*?})/gs)

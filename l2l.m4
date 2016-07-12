@@ -7,17 +7,18 @@ divert(0)dnl
 
 #include "harmAVX.h"
 #include "avxdouble.h"
+#include <cstdio>
 
-void e2e(
+void l2l(
 	const double xrels[],
 	const double yrels[],
 	const double zrels[],
 	const double srcexps[],
 	double dstexp[])
 {
-	LUNROLL(n, 0, ORDER-1, `__m256d substr(echo(LUNROLL(m, 0, n, `, Mre_`'n`'_`'m = _mm256_setzero_pd()');), `1')'
+	LUNROLL(n, 0, ORDER-1, `__m256d substr(echo(LUNROLL(m, 0, n, `, Lre_`'n`'_`'m = _mm256_setzero_pd()');), `1')'
 	)
-	LUNROLL(n, 0, ORDER-1, `__m256d substr(echo(LUNROLL(m, 0, n, `, Mim_`'n`'_`'m = _mm256_setzero_pd()');), `1')'
+	LUNROLL(n, 0, ORDER-1, `__m256d substr(echo(LUNROLL(m, 0, n, `, Lim_`'n`'_`'m = _mm256_setzero_pd()');), `1')'
 	)
 
 	for (int i=0; i<8; i+=4)
@@ -59,42 +60,47 @@ void e2e(
 
 		{
 			// Set up sin and cos of phi
-			LUNROLL(m, 0, ORDER-1, `const __m256d cosphi_`'m = phi_x * mag_1;
+			LUNROLL(m, 0, ORDER-1, `
+			const __m256d cosphi_`'m = phi_x * mag_1;
 			const __m256d sinphi_`'m = phi_y * mag_1;
 			tmp = phi_x*x - phi_y*y;
 			phi_y = phi_x*y + phi_y*x;
 			phi_x = tmp;
 			mag_1 *= phiMag_1;
-
 			')
 
 			// Precompute the harmonics
-			LUNROLL(n, 0, ORDER-1, `LUNROLL(m, 0, n, `const __m256d absY_`'n`'_`'m`' = Y_`'n`'_`'m`'(sintheta, costheta);
+			LUNROLL(n, 0, ORDER-1, `LUNROLL(m, 0, n, `
+			const __m256d absY_`'n`'_`'m`' = Y_`'n`'_`'m`'(sintheta, costheta);
 			reY_`'n`'_`'m`' = absY_`'n`'_`'m`' * cosphi_`'m;
 			imY_`'n`'_`'m`' = absY_`'n`'_`'m`' * sinphi_`'m;
-
 			')')
 		}
 
-		// Now begin translation
+		// Now begin conversion to local
 		//
 		// First double loop with k and j
 		// Second - with n and m
 
-		LUNROLL(j, 0, ORDER-1, `LUNROLL(k, 0, j, `LUNROLL(n, 0, j, `LUNROLL(m, -n, n, `ifelse(eval(m4abs(eval(k-m)) <= m4abs(eval(j-n))), 1, `{
-			const __m256d f = feval( ifelse( eval(m4abs( eval((m4abs(k) - m4abs(m) - m4abs(eval(k-m))) % 4) )), 0, 1, -1) * \
-									sqrt( f(j-k)*f(j+k) / (f(j-n-k+(m))*f(j-n+k-(m))*f(n-(m))*f(n+(m))) )  ) * rho`'n`';
-			const __m256d reO = Ore_`'eval(j-n)_`'m4abs(eval(k-m));
-			const __m256d imO = ifelse( eval( k-m > 0 ), 1, `', `-') Oim_`'eval(j-n)_`'m4abs(eval(k-m));
+		LUNROLL(j, 0, ORDER-1, `LUNROLL(k, 0, j, `LUNROLL(n, j, ORDER-1, `LUNROLL(m, -n, n, `ifelse(eval(m4abs(eval(m-k)) <= m4abs(eval(n-j))), 1, `{
+			const __m256d f = feval( ifelse( eval(m4abs( eval( (m4abs(m) - m4abs(eval((m)-k)) - m4abs(k)) % 4 ) )), 0, 1, -1) * \
+									 ifelse( eval( (n+j) % 2), 0, 1, -1) * \
+									 sqrt( f(n-(m))*f(n+(m)) / (f(j-k)*f(j+k)*f(n-j-(m)+k)*f(n-j+(m)-k)) )  ) * rho`'eval(n-j)`';
+			const __m256d reO = ifelse( eval( m % 2 ), -1, `-', `') Ore_`'n`'_`'m4abs(m)`';
+			const __m256d imO = ifelse( eval( m < 0 && m % 2 == 0 ), 1, `-', `') Oim_`'n`'_`'m4abs(m)`';
 
-			Mre_`'j`'_`'k += f * (reY_`'n`'_`'m4abs(m) * reO ifelse( eval( m > 0 ), 1, `-', `+') imY_`'n`'_`'m4abs(m) * imO);
-			Mim_`'j`'_`'k += f * (reY_`'n`'_`'m4abs(m) * imO ifelse( eval( m > 0 ), 1, `+', `-') imY_`'n`'_`'m4abs(m) * reO);
+			const __m256d reY = ifelse( eval( (m-k) % 2 ), -1, `-', `') reY_`'eval(n-j)`'_`'m4abs(eval(m-k));
+			const __m256d imY = ifelse( eval( (m-k) < 0 && (m-k) % 2 == 0 ), 1, `', `-') imY_`'eval(n-j)`'_`'m4abs(eval(m-k));
+
+			Lre_`'j`'_`'k`' += f * (reY*reO - imY*imO);
+			Lim_`'j`'_`'k`' += f * (reY*imO + imY*reO);
 		}
 
 		')')')')')
 	}
 
-	LUNROLL(n, 0, ORDER-1, `LUNROLL(m, 0, n, `dstexp[eval((n-1) * (n+2) + 2 + m)] = horizontalAdd(Mre_`'n`'_`'m`');
-	dstexp[eval((n-1) * (n+2) + 3 + n + m)] = horizontalAdd(Mim_`'n`'_`'m`');
+	LUNROLL(n, 0, ORDER-1, `LUNROLL(m, 0, n, `
+	dstexp[eval((n-1) * (n+2) + 2 + m)]     = horizontalAdd(Lre_`'n`'_`'m`');
+	dstexp[eval((n-1) * (n+2) + 3 + n + m)] = horizontalAdd(Lim_`'n`'_`'m`');
 	')')
 }

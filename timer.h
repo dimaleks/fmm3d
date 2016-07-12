@@ -1,68 +1,58 @@
 /*
  *  timer.h
- *  hw
+ *  smarties
  *
- *  Created by Dmitry Alexeev on 30.10.12.
- *  Copyright 2012 ETH Zurich. All rights reserved.
+ *  Created by Dmitry Alexeev on 15.2.16.
+ *  Copyright 2016 ETH Zurich. All rights reserved.
  *
  */
 
 #pragma once
 
-#include <unistd.h>
-#include <ctype.h>
-#include <stdlib.h>
-
-#ifndef __APPLE__
-#include <ctime>
-inline long int mach_absolute_time()
-{
-	timespec t;
-	clock_gettime(CLOCK_MONOTONIC, &t);
-	return (long int) (t.tv_sec*1e9 + t.tv_nsec);
-}
-#else
-#include <mach/mach.h>
-#include <mach/mach_time.h>
-#endif
+#include <chrono>
 
 class Timer
 {
 private:
-	long int _start, _end;
-	
+    std::chrono::time_point<std::chrono::high_resolution_clock> _start, _end;
+    
+    const std::chrono::time_point<std::chrono::high_resolution_clock> none =
+          std::chrono::time_point<std::chrono::high_resolution_clock>::min();
+    
 public:
-	
-	Timer()
-	{
-		_start = 0;
-		_end = 0;
-	}
-	
-	void start()
-	{
-		_start = mach_absolute_time();
-		_end = 0;
-	}
-	
-	void stop()
-	{
-		_end = mach_absolute_time();
-	}
-	
-	long int elapsed()
-	{
-		if (_end == 0) _end = mach_absolute_time();
-		return _end - _start;
-	}
-	
-	long int elapsedAndReset()
-	{
-		if (_end == 0) _end = mach_absolute_time();
-		long int t = _end - _start;
-		_start = _end;
-		_end = 0;
-		return t;
-	}
-	
+    
+    inline Timer()
+    {
+        _start = none;
+        _end   = none;
+    }
+    
+    inline void start()
+    {
+        _start = std::chrono::high_resolution_clock::now();
+        _end   = none;
+    }
+    
+    inline void stop()
+    {
+        _end = std::chrono::high_resolution_clock::now();
+    }
+    
+    inline long long elapsed()
+    {
+        if (_end == none) _end = std::chrono::high_resolution_clock::now();
+        
+        return std::chrono::duration <long int, std::nano>(_end - _start).count();
+    }
+    
+    inline long long elapsedAndReset()
+    {
+        if (_end == none) _end = std::chrono::high_resolution_clock::now();
+        
+        long long t = std::chrono::duration <long long, std::nano>(_end - _start).count();
+        
+        _start = _end;
+        _end = none;
+        return t;
+    }
 };

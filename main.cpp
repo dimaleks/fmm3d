@@ -10,19 +10,18 @@
 #include <limits>
 #include <vector>
 
-#include "timer.h"
-#include "tree.h"
-#include "e2p.h"
-#include "p2p.h"
+#include <immintrin.h>
 
-#define LMAX 10
-#define EXPSIZE  (ORDER * (ORDER+1))
+#include "fmm.h"
+#include "profiler.h"
+
 double tol = 1e-8;
 
 void check(const double * ref, const double * res, const int N)
 {
 	double linf = 0, l1 = 0, linf_rel = 0, l1_rel = 0;
 
+	printf("\nChecking...\n");
 	for(int i = 0; i < N; ++i)
 	{
 		assert(!std::isnan(ref[i]));
@@ -32,10 +31,8 @@ void check(const double * ref, const double * res, const int N)
 		const double maxval = std::max(fabs(res[i]), fabs(ref[i]));
 		const double relerr = err/std::max(1e-3, maxval);
 
-		if (fabs(relerr) >= tol && fabs(err) >= tol)
-			printf("%d: %e ref: %e -> %e %e\n", i, res[i], ref[i], err, relerr);
-
-		assert(fabs(relerr) < tol || fabs(err) < tol);
+//		if (fabs(relerr) >= tol && fabs(err) >= tol)
+//			printf("%3d: %16.8e vs %16.8e     err:    %16.8e %16.8e\n", i, res[i], ref[i], err, relerr);
 
 		l1 += fabs(err);
 		l1_rel += fabs(relerr);
@@ -52,144 +49,9 @@ void check(const double * ref, const double * res, const int N)
 }
 
 
-void evaluate(	const Node* nodes,
-				const double *expdata,
-				const double *xdata,
-				const double *ydata,
-				const double *zdata,
-				const double *qdata,
-				const double thetasquared,
-				double * const result,
-				const double xt,
-				const double yt,
-				const double zt)
-{
-	int ne2p = 0, np2p = 0;
-
-	static const int nchildren = 8;
-	enum { BUFSIZE = 16 };
-
-	int stack[LMAX * 8];
-
-	int bufcount = 0;
-	double xrels alignas(32) [BUFSIZE], yrels alignas(32) [BUFSIZE];
-	double zrels alignas(32) [BUFSIZE], qs    alignas(32) [BUFSIZE];
-	const double *exps[BUFSIZE];
-
-	int stackentry = 0, maxentry = 0;
-
-	stack[0] = 0;
-	*result = 0;
-	while(stackentry > -1)
-	{
-		const int nodeid = stack[stackentry--];
-		const Node * const node = nodes + nodeid;
-
-		assert(nodeid < node->child_id || node->child_id == 0);
-
-		const double xr = xt - node->xcom;
-		const double yr = yt - node->ycom;
-		const double zr = zt - node->zcom;
-		const double r2 = xr*xr + yr*yr + zr*zr;
-
-		if (node->r * node->r < thetasquared * r2)
-		{
-			xrels[bufcount] = xr;
-			yrels[bufcount] = yr;
-			zrels[bufcount] = zr;
-			qs[bufcount] = node->Q;
-			exps[bufcount] = expdata + EXPSIZE * nodeid;
-
-			++bufcount;
-
-			if (bufcount == BUFSIZE)
-			{
-				bufcount = 0;
-				*result += ispc::e2p(xrels, yrels, zrels, BUFSIZE, exps);
-
-				ne2p+=BUFSIZE;
-			}
-		}
-		else
-		{            
-			if (node->child_id == 0) // || node->part_end - node->part_start < 100)
-			{
-				const int s = node->part_start;
-				const int e = node->part_end;
-
-				*result += ispc::p2p(xdata + s, ydata + s, zdata +s, qdata + s, e - s, xt, yt, zt);
-				np2p+=e-s;
-			}
-			else
-			{
-				for(int c = 0; c < nchildren; ++c)
-					stack[++stackentry] = node->child_id + c;
-
-				maxentry = std::max(maxentry, stackentry);
-			}
-		}
-	}
-
-	if (bufcount)
-	{
-		*result += ispc::e2p(xrels, yrels, zrels, bufcount, exps);
-		ne2p+=bufcount;
-	}
-
-	//printf("Took %d e2p,  %d p2p\n", ne2p, np2p);
-}
-
-
-void potential(double theta, double *xsrc, double *ysrc, double *zsrc, double *qsrc, int nsrc,
-			  double *xdst, double *ydst, double *zdst, int ndst, double *pdst)
-{
-	static bool maxN = 0;
-	static double *xsorted = nullptr, *ysorted, *zsorted, *qsorted;
-	static double *expansions;
-	static Node   *nodes;
-
-	const int k = 0.01*1536;	// leaf capacity
-	int maxnodes;
-
-	if (maxN < nsrc)
-	{
-		if (xsorted != nullptr)
-		{
-			free(xsorted);
-			free(ysorted);
-			free(zsorted);
-			free(qsorted);
-			free(nodes);
-			free(expansions);
-		}
-
-		posix_memalign((void **)&xsorted, 32, sizeof(double) * nsrc);
-		posix_memalign((void **)&ysorted, 32, sizeof(double) * nsrc);
-		posix_memalign((void **)&zsorted, 32, sizeof(double) * nsrc);
-		posix_memalign((void **)&qsorted, 32, sizeof(double) * nsrc);
-
-		maxnodes = (nsrc + k - 1) / k * 20;
-		posix_memalign((void **)&nodes, 32, sizeof(Node) * maxnodes);
-		posix_memalign((void **)&expansions, 32, sizeof(double) * EXPSIZE * maxnodes);
-		maxN = nsrc;
-	}
-
-	build(xsrc, ysrc, zsrc, qsrc, nsrc, k, maxnodes, xsorted, ysorted, zsorted, qsorted, nodes, expansions);
-
-	Timer tm;
-	tm.start();
-
-	#pragma omp parallel for schedule(static,1)
-	for(int i = 0; i < ndst; ++i)
-		evaluate(nodes, expansions, xsorted, ysorted, zsorted, qsorted,
-				theta*theta, pdst + i, xdst[i], ydst[i], zdst[i]);
-	double t = tm.elapsed();
-	printf("Evaluation took %.3f ms (%.3f us per target)\n", t*1e-6, t*1e-3 / ndst);
-}
-
 void test(double theta, double tol, bool verify = true)
 {
-	const int nsrc = 2000000;
+	const int nsrc = 1000000;
 	double *xsrc, *ysrc, *zsrc, *qsrc;
 
 	posix_memalign((void **)&xsrc, 32, sizeof(double) * nsrc);
@@ -199,19 +61,30 @@ void test(double theta, double tol, bool verify = true)
 
 	for (int i=0; i<nsrc; i++)
 	{
-		xsrc[i] = drand48() - 0.5;
-		ysrc[i] = drand48() - 0.5;
-		zsrc[i] = drand48() - 0.5;
+//		xsrc[i] = drand48() - 0.5;
+//		ysrc[i] = drand48() - 0.5;
+//		zsrc[i] = drand48() - 0.5;
+
+		double l = (drand48() - 0.5) * 1.4142;
+		xsrc[i] = l + (drand48() - 0.5) * 0.01;
+		ysrc[i] = l + (drand48() - 0.5) * 0.01;
+		zsrc[i] = l + (drand48() - 0.5) * 0.01;
 
 		qsrc[i] = 0.1*(drand48() - 0.5);
 	}
 
 
-	int ndst = 1000;
+	int ndst = 10000;
 	double *xdst, *ydst, *zdst, *potentials;
-	posix_memalign((void **)&xdst,   32, sizeof(double) * ndst);
-	posix_memalign((void **)&ydst,   32, sizeof(double) * ndst);
-	posix_memalign((void **)&zdst,   32, sizeof(double) * ndst);
+	double *xfrc, *yfrc, *zfrc;
+	posix_memalign((void **)&xdst, 32, sizeof(double) * ndst);
+	posix_memalign((void **)&ydst, 32, sizeof(double) * ndst);
+	posix_memalign((void **)&zdst, 32, sizeof(double) * ndst);
+
+	posix_memalign((void **)&xfrc, 32, sizeof(double) * ndst);
+	posix_memalign((void **)&yfrc, 32, sizeof(double) * ndst);
+	posix_memalign((void **)&zfrc, 32, sizeof(double) * ndst);
+
 	posix_memalign((void **)&potentials, 32, sizeof(double) * ndst);
 
 	for (int i=0; i<ndst; i++)
@@ -226,21 +99,33 @@ void test(double theta, double tol, bool verify = true)
 
 	printf("Testing %s with %d sources and %d targets (theta %.3e)...\n", "POTENTIAL", nsrc, ndst, theta);
 
-	Timer tm;
-	tm.start();
-	for (int n=0; n<1; n++)
-		potential(theta, xsrc, ysrc, zsrc, qsrc, nsrc, xdst, ydst, zdst, ndst, potentials);
-	const double tpot = tm.elapsed();
+	FMM3D fmm(theta, 4000);
+	const int iters = 1;
+	for (int n=0; n<iters; n++)
+	{
+		fmm.buildTree(nsrc, xsrc, ysrc, zsrc, qsrc);
+		fmm.potential(ndst, xdst, ydst, zdst, potentials);
+		fmm.force    (ndst, xdst, ydst, zdst, xfrc, yfrc, zfrc);
+	}
 
-	printf("\x1b[94msolved in %.2f ms\x1b[0m\n", tpot * 1e-6);
+	double usppot = fmm.profiler.elapsed("Potential", Profiler::Unit::us) / ndst;
+	double uspfrc = fmm.profiler.elapsed("Force", Profiler::Unit::us) / ndst;
+	printf("%s", fmm.profiler.printStatAndReset().c_str());
+	printf("Time per potential: %.2f us\n", usppot);
+	printf("Time per force    : %.2f us\n", uspfrc);
+	printf("Average p2p particles: %.1f,  average e2p evals: %.1f",
+			(double)fmm.np2p / iters / ndst, (double)fmm.ne2p / iters / ndst);
 
 	if (verify)
 	{
-		double *pref;
+		double *pref, *xref, *yref, *zref;
 		posix_memalign((void **)&pref, 32, sizeof(double) * ndst);
+		posix_memalign((void **)&xref, 32, sizeof(double) * ndst);
+		posix_memalign((void **)&yref, 32, sizeof(double) * ndst);
+		posix_memalign((void **)&zref, 32, sizeof(double) * ndst);
 
 		const int OFFSET = 0;
-		const int JUMP = 435;
+		const int JUMP = 1435;
 
 #pragma omp parallel for
 		for(int i = OFFSET; i < ndst; i += JUMP)
@@ -250,6 +135,7 @@ void test(double theta, double tol, bool verify = true)
 			const double zd = zdst[i];
 
 			double s = 0;
+			double sx = 0, sy = 0, sz = 0;
 
 			for(int j = 0; j < nsrc; ++j)
 			{
@@ -257,21 +143,47 @@ void test(double theta, double tol, bool verify = true)
 				const double yr = yd - ysrc[j];
 				const double zr = zd - zsrc[j];
 				const double r2 = xr*xr + yr*yr + zr*zr;
-				s += (fabs(r2) > eps) ? qsrc[j] / sqrt(r2) : 0;
+
+				double p = qsrc[j] / sqrt(r2+eps);
+				s += (fabs(r2) > eps) ? p : 0;
+
+				p /= r2;
+				sx += p * xr;
+				sy += p * yr;
+				sz += p * zr;
 			}
 			pref[i] = s;
+			xref[i] = sx;
+			yref[i] = sy;
+			zref[i] = sz;
 		}
 
-		std::vector<double> a, b;
+		std::vector<double> p, pr, x, xr, y, yr, z, zr;
 
 		for(int i = OFFSET; i < ndst; i += JUMP)
 		{
-			a.push_back(pref[i]);
-			b.push_back(potentials[i]);
+			pr.push_back(pref[i]);
+			p .push_back(potentials[i]);
+
+			xr.push_back(xref[i]);
+			x .push_back(xfrc[i]);
+
+			yr.push_back(yref[i]);
+			y .push_back(yfrc[i]);
+
+			zr.push_back(zref[i]);
+			z .push_back(zfrc[i]);
 		}
 
-		check(&a[0], &b[0], a.size());
+		check(&pr[0], &p[0], p.size());
+		check(&xr[0], &x[0], p.size());
+		check(&yr[0], &y[0], p.size());
+		check(&zr[0], &z[0], p.size());
+
 		free(pref);
+		free(xref);
+		free(yref);
+		free(zref);
 	}
 
 	free(xdst);
@@ -283,14 +195,14 @@ void test(double theta, double tol, bool verify = true)
 	free(ysrc);
 	free(zsrc);
 	free(qsrc);
-
-	printf("TEST PASSED.\n");
 }
 
 int main(int argc, char ** argv)
 {
-	double theta = 0.35;
+	double theta = 0.5;
 	bool verify = true;
+
+	_mm_setcsr( _mm_getcsr() | (1<<15) | (1<<6));
 
 	if (argc > 1)
 		theta = atof(argv[1]);

@@ -92,10 +92,12 @@ export void node_setup( uniform const double xs[],
 inline int morton3D_SplitBy3bits(const int a)
 {
 	int x = a;
+	x = x               & 0x000003ff;
 	x = (x | (x << 16)) & 0xff0000ff;
-	x = (x | (x << 8))  & 0x0f00f00f;
-	x = (x | (x << 4))  & 0xc30c30c3;
-	x = (x | (x << 2))  & 0x49249249;
+	x = (x | (x << 8))  & 0x0300f00f;
+	x = (x | (x << 4))  & 0x030c30c3;
+	x = (x | (x << 2))  & 0x09249249;
+
 	return x;
 }
 
@@ -109,6 +111,7 @@ task unmasked void morton_int(	uniform const int N,
 								uniform const double ext,
 								uniform int index[])
 {
+	// https://github.com/Forceflow/libmorton
 	const uniform double factor = 1.0 / ext * (1 << LMAX);
 
 	const uniform int s = (taskIndex * N) / taskCount;
