@@ -1,4 +1,4 @@
-#define LMAX 10
+#define LMAX 21
 
 export void minmax( uniform const int N,
 					uniform const double x[],
@@ -89,14 +89,15 @@ export void node_setup( uniform const double xs[],
 	radius = sqrt(reduce_max(r2));
 }
 
-inline int morton3D_SplitBy3bits(const int a)
+inline int64 splitBy3bits(const int a)
 {
-	int x = a;
-	x = x               & 0x000003ff;
-	x = (x | (x << 16)) & 0xff0000ff;
-	x = (x | (x << 8))  & 0x0300f00f;
-	x = (x | (x << 4))  & 0x030c30c3;
-	x = (x | (x << 2))  & 0x09249249;
+	int64 x = a;
+	x = x               & 0x00000000001fffff;
+	x = (x | (x << 32)) & 0x001f00000000ffff;
+	x = (x | (x << 16)) & 0x001f0000ff0000ff;
+	x = (x | (x << 8))  & 0x100f00f00f00f00f;
+	x = (x | (x << 4))  & 0x10c30c30c30c30c3;
+	x = (x | (x << 2))  & 0x1249249249249249;
 
 	return x;
 }
@@ -109,10 +110,10 @@ task unmasked void morton_int(	uniform const int N,
 								uniform const double ymin,
 								uniform const double zmin,
 								uniform const double ext,
-								uniform int index[])
+								uniform int64 index[])
 {
 	// https://github.com/Forceflow/libmorton
-	const uniform double factor = 1.0 / ext * (1 << LMAX);
+	const uniform double factor = 1.0 / ext * (1ll << LMAX);
 
 	const uniform int s = (taskIndex * N) / taskCount;
 	const uniform int e = min( (int) ( ((taskIndex+1) * N) / taskCount ), N);
@@ -123,13 +124,13 @@ task unmasked void morton_int(	uniform const int N,
 		int yid = floor((y[i] - ymin) * factor);
 		int zid = floor((z[i] - ymin) * factor);
 
-		index[i] = morton3D_SplitBy3bits(xid) | (morton3D_SplitBy3bits(yid) << 1) | (morton3D_SplitBy3bits(zid) << 2);
+		index[i] = splitBy3bits(xid) | (splitBy3bits(yid) << 1) | (splitBy3bits(zid) << 2);
 	}
 }
 
 export void morton(uniform const int N, uniform const double x[], uniform const double y[], uniform const double z[],
 			uniform const double xmin, uniform const double ymin, uniform const double zmin, uniform const double ext,
-			uniform int index[], uniform const int ntasks)
+			uniform int64 index[], uniform const int ntasks)
 {
 	uniform const int myntasks = N > 10000 ? ntasks : 1;
 

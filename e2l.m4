@@ -2,12 +2,10 @@ include(unroll.m4)
 
 divert(-1)
 define(`m4abs', `ifelse(eval($1 >= 0), `1', `$1', eval(0-$1))')dnl
-define(`feval', `syscmd( bc -l <<< "define f(x) { if(x <= 1) return (1); return (f(x-1) * x); } scale=20; print $1") ')
 divert(0)dnl
 
 #include "harmonics.h"
 #include "a.h"
-//#include <cstdlib>
 
 inline int abs(int v)
 {
@@ -52,21 +50,21 @@ export void e2l(
 
 		const double xxyy  = x*x + y*y;
 		const double rho2  = xxyy + z*z;
-		const double rho   = sqrt(rho2);
+		const double rho   = sqrt(rho2 + __DBL_EPSILON__*10);
 		const double rho_1 = 1.0d / rho;
 
 		const double costheta = z * rho_1;
 		const double sintheta = sqrt(1.0d - costheta*costheta);
 
-		const double phiMag_1 = rsqrt(xxyy);
-		double mag_1 = (1.0d);
-		double phi_x = (1.0d);
-		double phi_y = (0.0d);
+		const double phiMag_1 = rsqrt(xxyy + __DBL_EPSILON__*10);
+		double mag_1 = 1.0d;
+		double phi_x = 1.0d;
+		double phi_y = 0.0d;
 		double tmp;
 
 		// Set up rho's
 		double rhos[2*ORDER];
-		rhos[0] = (1.0);
+		rhos[0] = 1.0;
 		rhos[1] = rho_1;
 
 		LUNROLL(n, 2, 2*ORDER-1, `rhos[`'n`'] = rhos[decr(n)] * rho_1;
@@ -94,7 +92,7 @@ export void e2l(
 		// Now begin conversion to local
 		//
 		// First double loop with k and j
-		// Second - with n and m
+		// Second, with n and m, unrolled
 
 		for (uniform int j=0; j<ORDER; j++)
 		{
@@ -104,14 +102,14 @@ export void e2l(
 				if (abs(m-k) <= abs(j+n))
 				{
 					const double f =
-							( (abs(k-(m)) - abs(k) - abs(m)) % 4 == 0 ? 1 : -1 ) * ifelse( eval(n % 2), 0, 1, -1 ) *
+							( (abs(k-(m)) - abs(k) - abs(m)) % 4 == 0 ? 1.0d : -1.0d ) * ifelse( eval(n % 2), 0, 1.0d, -1.0d ) *
 							A[j][k] * A[n][m4abs(m)] / A[j+n][abs(m-k)] * rhos[j+n+1];
 
-					const double reO = ifelse( eval( m % 2 ), -1, `-', `') Ore[`'n`'][`'m4abs(m)`'];
-					const double imO = ifelse( eval( m < 0 && m % 2 == 0 ), 1, `-', `') Oim[`'n`'][`'m4abs(m)`'];
+					const double reO = Ore[n][m4abs(m)];
+					const double imO = ifelse( eval( m < 0 ), 1, `-', `') Oim[n][m4abs(m)];
 
-					const double reY = ((m-k) % 2 == -1) ? -Yre[j+n][abs(m-k)] : Yre[j+n][abs(m-k)];
-					const double imY = ((m-k) < 0 && (m-k) % 2 == 0) ? Yim[j+n][abs(m-k)] : -Yim[j+n][abs(m-k)];
+					const double reY = Yre[j+n][abs(m-k)];
+					const double imY = ((m-k) < 0) ? -Yim[j+n][-(m-k)] : Yim[j+n][(m-k)];
 
 					Lre[j][k] += f * (reY*reO - imY*imO);
 					Lim[j][k] += f * (reY*imO + imY*reO);

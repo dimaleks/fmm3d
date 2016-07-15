@@ -1,7 +1,5 @@
 include(unroll.m4)
 #include "harmonics.h"
-#include "b.h"
-
 
 divert(-1)
 define(`feval', `syscmd( printf "%0.16fd" $(bc -l <<< "define f(x) { if(x <= 1) return (1); return (f(x-1) * x); } scale=16; print $1") )')

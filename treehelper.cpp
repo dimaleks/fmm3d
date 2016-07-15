@@ -12,7 +12,7 @@
 
 #include "treekernels.h"
 
-#define LMAX 10
+#define LMAX 21
 
 void extent(const int N,
 		const double* __restrict const x,
@@ -58,21 +58,21 @@ void extent(const int N,
 }
 
 void morton(const int N, const double* __restrict const x, const double* __restrict const y, const double* __restrict const z,
-		const double xmin, const double ymin, const double zmin, const double ext, int* __restrict index)
+		const double xmin, const double ymin, const double zmin, const double ext, long long* __restrict index)
 {
 	ispc::morton(N, x, y, z, xmin, ymin, zmin, ext, index, omp_get_max_threads());
 }
 
-void sort(const int N, int* __restrict index, int* __restrict keys)
+void sort(const int N, long long* __restrict index, int* __restrict order)
 {
-	std::pair<int, int> * kv = NULL;
+	std::pair<long long, int> *kv;
 	posix_memalign((void **)&kv, 32, sizeof(*kv) * N);
 
 #pragma omp parallel for
 	for(int i = 0; i < N; ++i)
 	{
 		kv[i].first = index[i];
-		kv[i].second = keys[i];
+		kv[i].second = order[i];
 	}
 
 
@@ -88,7 +88,7 @@ void sort(const int N, int* __restrict index, int* __restrict keys)
 	for(int i = 0; i < N; ++i)
 	{
 		index[i] = kv[i].first;
-		keys[i] = kv[i].second;
+		order[i] = kv[i].second;
 	}
 
 	free(kv);

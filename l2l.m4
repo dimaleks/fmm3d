@@ -2,67 +2,79 @@ include(unroll.m4)
 
 divert(-1)
 define(`m4abs', `ifelse(eval($1 >= 0), `1', `$1', eval(0-$1))')dnl
-define(`feval', `syscmd( printf "%0.16f" $(bc -l <<< "define f(x) { if(x <= 1) return (1); return (f(x-1) * x); } scale=20; print $1") )')
 divert(0)dnl
 
-#include "harmAVX.h"
-#include "avxdouble.h"
-#include <cstdio>
+#include "harmonics.h"
+#include "a.h"
 
-void l2l(
-	const double xrels[],
-	const double yrels[],
-	const double zrels[],
-	const double srcexps[],
-	double dstexp[])
+inline int abs(int v)
 {
-	LUNROLL(n, 0, ORDER-1, `__m256d substr(echo(LUNROLL(m, 0, n, `, Lre_`'n`'_`'m = _mm256_setzero_pd()');), `1')'
-	)
-	LUNROLL(n, 0, ORDER-1, `__m256d substr(echo(LUNROLL(m, 0, n, `, Lim_`'n`'_`'m = _mm256_setzero_pd()');), `1')'
-	)
+	return v > 0 ? v : -v;
+}
 
-	for (int i=0; i<8; i+=4)
+inline uniform int abs(uniform int v)
+{
+	return v > 0 ? v : -v;
+}
+
+export void l2l(
+	const uniform double xrels[],
+	const uniform double yrels[],
+	const uniform double zrels[],
+	const uniform double srcexps[],
+	double uniform dstexps[])
+{
+	double Mre[ORDER][ORDER];
+	double Mim[ORDER][ORDER];
+
+	LUNROLL(n, 0, ORDER-1, `LUNROLL(m, 0, n, `
+	Mre[`'n`']['`m'`] = 0;
+	Mim[`'n`']['`m'`] = 0;')')
+
+	foreach(i=0...8)
 	{
-		// Set up the expansion coefficients
-		LUNROLL(n, 0, ORDER-1, `__m256d substr(echo(LUNROLL(m, 0, n, `, Ore_`'n`'_`'m = _mm256_load_pd(srcexps + eval( ((n-1) * (n+2) + 2 + m)*8 ) + i)');), `1')'
-		)
-		LUNROLL(n, 0, ORDER-1, `__m256d substr(echo(LUNROLL(m, 0, n, `, Oim_`'n`'_`'m = _mm256_load_pd(srcexps + eval( ((n-1) * (n+2) + 3 + n + m)*8 ) + i)');), `1')'
-		)
+		double Ore[ORDER][ORDER];
+		double Oim[ORDER][ORDER];
+
+		double Yre[ORDER][ORDER];
+		double Yim[ORDER][ORDER];
+
+		LUNROLL(n, 0, ORDER-1, `LUNROLL(m, 0, n, `
+		Ore[`'n`']['`m'`] = srcexps[eval( ((n-1) * (n+2) + 2 + m)*8 ) + i];
+		Oim[`'n`']['`m'`] = srcexps[eval( ((n-1) * (n+2) + 3 + n + m)*8 ) + i];')')
 
 		// Set up the arguments of the harmonic functions
-		const __m256d x = _mm256_load_pd(xrels+i);
-		const __m256d y = _mm256_load_pd(yrels+i);
-		const __m256d z = _mm256_load_pd(zrels+i);
+		const double x = xrels[i];
+		const double y = yrels[i];
+		const double z = zrels[i];
 
-		const __m256d xxyy  = x*x + y*y;
-		const __m256d rho2  = xxyy + z*z;
-		const __m256d rho   = _mm256_sqrt_pd(rho2);
-		const __m256d rho_1 = 1.0d / rho;
+		const double xxyy  = x*x + y*y;
+		const double rho2  = xxyy + z*z;
+		const double rho   = sqrt(rho2 + __DBL_EPSILON__*10);
+		const double rho_1 = 1.0d / rho;
 
-		const __m256d costheta = z * rho_1;
-		const __m256d sintheta = _mm256_sqrt_pd(1 - costheta*costheta);
+		const double costheta = z * rho_1;
+		const double sintheta = sqrt(1.0d - costheta*costheta);
 
-		const __m256d phiMag_1 = 1.0 / _mm256_sqrt_pd(xxyy);
-		__m256d mag_1 = _mm256_set1_pd(1.0);
-		__m256d phi_x = _mm256_set1_pd(1.0);
-		__m256d phi_y = _mm256_set1_pd(0.0);
-		__m256d tmp;
-
-		LUNROLL(n, 0, ORDER-1, `LUNROLL(m, 0, n, `__m256d reY_`'n`'_`'m`';
-		__m256d imY_`'n`'_`'m`';
-		')')
+		const double phiMag_1 = rsqrt(xxyy + __DBL_EPSILON__*10);
+		double mag_1 = 1.0d;
+		double phi_x = 1.0d;
+		double phi_y = 0.0d;
+		double tmp;
 
 		// Set up rho's
-		const __m256d rho0 = _mm256_set1_pd(1.0);
-		const __m256d rho1 = rho;
-		LUNROLL(n, 3, ORDER-1, `const __m256d rho`'n`' = rho`'decr(n) * rho;
+		double rhos[ORDER];
+		rhos[0] = 1.0;
+		rhos[1] = rho;
+		rhos[2] = rho2;
+		LUNROLL(n, 3, ORDER-1, `rhos[`'n`'] = rhos[decr(n)] * rho;
 		')
 
 		{
 			// Set up sin and cos of phi
 			LUNROLL(m, 0, ORDER-1, `
-			const __m256d cosphi_`'m = phi_x * mag_1;
-			const __m256d sinphi_`'m = phi_y * mag_1;
+			const double cosphi_`'m = phi_x * mag_1;
+			const double sinphi_`'m = phi_y * mag_1;
 			tmp = phi_x*x - phi_y*y;
 			phi_y = phi_x*y + phi_y*x;
 			phi_x = tmp;
@@ -71,36 +83,44 @@ void l2l(
 
 			// Precompute the harmonics
 			LUNROLL(n, 0, ORDER-1, `LUNROLL(m, 0, n, `
-			const __m256d absY_`'n`'_`'m`' = Y_`'n`'_`'m`'(sintheta, costheta);
-			reY_`'n`'_`'m`' = absY_`'n`'_`'m`' * cosphi_`'m;
-			imY_`'n`'_`'m`' = absY_`'n`'_`'m`' * sinphi_`'m;
+			const double absY_`'n`'_`'m`' = Y_`'n`'_`'m`'(sintheta, costheta);
+			Yre[`'n`'][`'m`'] = absY_`'n`'_`'m`' * cosphi_`'m;
+			Yim[`'n`'][`'m`'] = absY_`'n`'_`'m`' * sinphi_`'m;
 			')')
 		}
 
 		// Now begin conversion to local
 		//
 		// First double loop with k and j
-		// Second - with n and m
+		// Second, with n and m, unrolled
 
-		LUNROLL(j, 0, ORDER-1, `LUNROLL(k, 0, j, `LUNROLL(n, j, ORDER-1, `LUNROLL(m, -n, n, `ifelse(eval(m4abs(eval(m-k)) <= m4abs(eval(n-j))), 1, `{
-			const __m256d f = feval( ifelse( eval(m4abs( eval( (m4abs(m) - m4abs(eval((m)-k)) - m4abs(k)) % 4 ) )), 0, 1, -1) * \
-									 ifelse( eval( (n+j) % 2), 0, 1, -1) * \
-									 sqrt( f(n-(m))*f(n+(m)) / (f(j-k)*f(j+k)*f(n-j-(m)+k)*f(n-j+(m)-k)) )  ) * rho`'eval(n-j)`';
-			const __m256d reO = ifelse( eval( m % 2 ), -1, `-', `') Ore_`'n`'_`'m4abs(m)`';
-			const __m256d imO = ifelse( eval( m < 0 && m % 2 == 0 ), 1, `-', `') Oim_`'n`'_`'m4abs(m)`';
+		for (uniform int j=0; j<ORDER; j++)
+		{
+			for (uniform int k=0; k<=j; k++)
+			{
+				LUNROLL(n, 0, ORDER-1, `LUNROLL(m, -n, n, `
+				if (abs(m-k) <= abs(n-j) && n >= j)
+				{
+					const double f =
+							( (abs(m) - abs(k-(m)) - abs(k)) % 4 == 0 ? 1.0d : -1.0d ) * ( (n+j) % 2 == 0 ? 1.0d : -1.0d ) *
+							A[n-j][abs(m-k)] * A[j][k] / A[n][abs(m)] * rhos[n-j];
 
-			const __m256d reY = ifelse( eval( (m-k) % 2 ), -1, `-', `') reY_`'eval(n-j)`'_`'m4abs(eval(m-k));
-			const __m256d imY = ifelse( eval( (m-k) < 0 && (m-k) % 2 == 0 ), 1, `', `-') imY_`'eval(n-j)`'_`'m4abs(eval(m-k));
+					const double reO = Ore[n][m4abs(m)];
+					const double imO = ifelse( eval(m < 0), 1, `-', `' ) Oim[n][m4abs(m)];
 
-			Lre_`'j`'_`'k`' += f * (reY*reO - imY*imO);
-			Lim_`'j`'_`'k`' += f * (reY*imO + imY*reO);
+					const double reY = Yre[n-j][abs(m-k)];
+					const double imY = ((m-k) < 0) ? -Yim[n-j][abs(m-k)] : Yim[n-j][abs(m-k)];
+
+					Mre[j][k] += f * (reY*reO - imY*imO);
+					Mim[j][k] += f * (reY*imO + imY*reO);
+				}
+				')')
+			}
 		}
-
-		')')')')')
 	}
 
 	LUNROLL(n, 0, ORDER-1, `LUNROLL(m, 0, n, `
-	dstexp[eval((n-1) * (n+2) + 2 + m)]     = horizontalAdd(Lre_`'n`'_`'m`');
-	dstexp[eval((n-1) * (n+2) + 3 + n + m)] = horizontalAdd(Lim_`'n`'_`'m`');
+	dstexps[eval( (n-1) * (n+2) + 2 + m )]     += reduce_add(Mre[`'n`'][`'m`']);
+	dstexps[eval( (n-1) * (n+2) + 3 + n + m )] += reduce_add(Mim[`'n`'][`'m`']);
 	')')
 }

@@ -15,10 +15,23 @@ class FMM3D
 	static const int evalBufSize = 8;
 
 	template<typename... Args>
+	void evaluateLog(const double xt,
+				  	 const double yt,
+					 const double zt,
+					 Args&... args);
+//
+//	template<typename... Args>
+//	void evaluate(const double xt,
+//				  const double yt,
+//				  const double zt,
+//				  const double* &ptrExps,
+//				  Args&... args);
+
 	void evaluate(const double xt,
-				  const double yt,
-				  const double zt,
-				  Args&... args);
+			const double yt,
+			const double zt,
+			const double* &ptrExps,
+			double &pot);
 
 public:
 	Profiler profiler;
@@ -33,6 +46,12 @@ public:
 					const double* __restrict const qsrc);
 
 	void recomputeExpansions(const double* __restrict const qsrc);
+
+	void potentialLog( const int ndst,
+					const double* __restrict const xdst,
+					const double* __restrict const ydst,
+					const double* __restrict const zdst,
+						  double* __restrict const potential);
 
 	void potential( const int ndst,
 					const double* __restrict const xdst,

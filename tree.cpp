@@ -22,7 +22,11 @@ namespace Tree
 	Tree::Tree(int leafCapacity) :
 		leafCapacity(leafCapacity), mortonIndex(nullptr), order(nullptr),
 		xsorted(nullptr), ysorted(nullptr), zsorted(nullptr), qsorted(nullptr),
-		nodes(nullptr), expansions(nullptr), neighbors(nullptr), locExps(nullptr), nsrc(0) {}
+		nodes(nullptr), expansions(nullptr), neighbors(nullptr),
+		myLocExps(nullptr), othersLocExps(nullptr), numNeighs(nullptr), nsrc(0)
+	{
+		std::fill(zeros, zeros + EXPSIZE, 0);
+	}
 
 	Tree::~Tree()
 	{
@@ -30,10 +34,14 @@ namespace Tree
 		free(order);
 		free(nodes);
 		free(expansions);
+		free(myLocExps);
+		free(neighbors);
+		free(numNeighs);
 		free(xsorted);
 		free(ysorted);
 		free(zsorted);
 		free(qsorted);
+		free(othersLocExps);
 	}
 
 	void Tree::buildRecursive(const int nodeid)
@@ -43,7 +51,7 @@ namespace Tree
 		const int s = node->part_start;
 		const int e = node->part_end;
 		const int l = node->level;
-		const int mId = node->morton_id;
+		const long long mId = node->morton_id;
 		const bool leaf = e - s <= leafCapacity || l + 1 > LMAX;
 
 
@@ -53,6 +61,9 @@ namespace Tree
 					node->Q, node->xcom, node->ycom, node->zcom, node->r, node->w);
 			ispc::p2e(xsorted + s, ysorted + s, zsorted + s, qsorted + s, e - s,
 					node->xcom, node->ycom, node->zcom, expansions + nodeid*EXPSIZE);
+
+			// Corner case
+			if (e-s == 1) node->r = ext / (1 << l);
 		}
 		else
 		{
@@ -70,8 +81,8 @@ namespace Tree
 			{
 				const int shift = 3 * (LMAX - l - 1);
 
-				const int key1 = mId | (c << shift);
-				const int key2 = key1 + (1 << shift) - 1;
+				const long long key1 = mId | ((long long)c << shift);
+				const long long key2 = key1 + ((long long)1 << shift) - 1;
 
 				const size_t indexmin = s + c == 0               ? s : std::lower_bound(mortonIndex+s, mortonIndex+e, key1) - mortonIndex;
 				const size_t indexsup = s + c == (nchildren - 1) ? e : std::upper_bound(mortonIndex+s, mortonIndex+e, key2) - mortonIndex;
@@ -99,6 +110,8 @@ namespace Tree
 			node_setup(xsorted + s, ysorted + s, zsorted + s, qsorted + s, e - s,
 					node->Q, node->xcom, node->ycom, node->zcom, node->r, node->w);
 
+			int nValid = 0;
+			int validId = -1;
 			for(int c = 0; c < nchildren; ++c)
 			{
 				const int chId = childbase + c;
@@ -109,27 +122,51 @@ namespace Tree
 				zrels[c] = child->zcom - node->zcom;
 
 				ptrExps[c]    = expansions + chId*EXPSIZE;
-				ptrLocExps[c] = locExps    + chId*EXPSIZE;
+				ptrLocExps[c] = myLocExps  + chId*EXPSIZE;
+				if (child->part_end - child->part_start > 0)
+				{
+					nValid++;
+					validId = chId;
+				}
 			}
 
-			//			ispc::p2e(xsorted + s, ysorted + s, zsorted + s, qsorted + s, e - s,
-			//					node->xcom, node->ycom, node->zcom, expansions + nodeid*EXPSIZE);
+//			ispc::p2e(xsorted + s, ysorted + s, zsorted + s, qsorted + s, e - s,
+//					node->xcom, node->ycom, node->zcom, expansions + nodeid*EXPSIZE);
+
+			// When only one child has any particles at all
+			// we simply copy the expansions
+			if (nValid <= 1)
+			{
+				std::copy(expansions + validId*EXPSIZE, expansions + (validId+1)*EXPSIZE, expansions + nodeid*EXPSIZE);
+				std::copy(myLocExps  + validId*EXPSIZE, myLocExps  + (validId+1)*EXPSIZE, myLocExps  + nodeid*EXPSIZE);
+				return;
+			}
 
 			transpose8xM(ptrExps, expsBuffer, EXPSIZE);
-			e2e(xrels, yrels, zrels, expsBuffer, expansions + nodeid*EXPSIZE);
+			ispc::e2e(xrels, yrels, zrels, expsBuffer, expansions + nodeid*EXPSIZE);
 
 			for(int c = 0; c < nchildren; ++c)
 			{
 				const int chId = childbase + c;
 				Node *child = nodes+chId;
 
-				xrels[c] = child->xcom;
-				yrels[c] = child->ycom;
-				zrels[c] = child->zcom;
+				{
+					xrels[c] = child->r*30;
+					yrels[c] = child->r*30;
+					zrels[c] = child->r*30;
+				}
 			}
 
-			e2l(xrels, yrels, zrels, (const double*)expsBuffer, locExpsBuffer);
+			ispc::e2l(xrels, yrels, zrels, (const double*)expsBuffer, locExpsBuffer);
 			transposeMx8(locExpsBuffer, ptrLocExps, EXPSIZE);
+
+//
+//			printf("%f %f %f (%d  %f)\n", nodes[childbase].xcom, nodes[childbase].ycom, nodes[childbase].zcom, nodes[childbase].level, nodes[childbase].r);
+//			for (int i=0; i<EXPSIZE; i++)
+//				printf("%f  ", locExpsBuffer[i*8]);
+//			printf("\n\n");
+//
+//			exit(0);
 		}
 	}
 
@@ -145,7 +182,7 @@ namespace Tree
 
 		if (parent->child_id == 0) return;
 
-		// For each child 'dest', sum the local contribution
+		// For each child 'dest': sum the local contribution
 		// from all the other children 'c' and the parent
 		for(int dest = 0; dest < nchildren; dest++)
 		{
@@ -155,15 +192,37 @@ namespace Tree
 				const int chId = parent->child_id + c;
 				auto child = nodes+chId;
 
-				xrels[c] = dstnode->xcom;
-				yrels[c] = dstnode->ycom;
-				zrels[c] = dstnode->zcom;
+				if (c != dest)
+				{
+					xrels[c] = child->xcom - child->r*30 - dstnode->xcom;
+					yrels[c] = child->ycom - child->r*30 - dstnode->ycom;
+					zrels[c] = child->zcom - child->r*30 - dstnode->zcom;
 
-				ptrLocExps[c] = locExps + ( (dest == c) ? nodeid*EXPSIZE : chId*EXPSIZE );
+					ptrLocExps[c] = myLocExps + chId*EXPSIZE;
+				}
+				else
+				{
+					xrels[c] = parent->xcom - dstnode->xcom;
+					yrels[c] = parent->ycom - dstnode->ycom;
+					zrels[c] = parent->zcom - dstnode->zcom;
+
+					ptrLocExps[c] = othersLocExps + nodeid*EXPSIZE;
+				}
+
+				//printf("%f %f %f   %f\n", xrels[c], yrels[c], zrels[c], child->r);
 			}
 
 			transpose8xM(ptrLocExps, locExpsBuffer, EXPSIZE);
-			l2l(xrels, yrels, zrels, locExpsBuffer, locExps + dest*EXPSIZE);
+			ispc::l2l(xrels, yrels, zrels, locExpsBuffer, othersLocExps + (parent->child_id + dest)*EXPSIZE);
+
+//			printf("DEST %d\n", dest);
+//			for (int i=0; i<EXPSIZE*8; i++)
+//				printf("%f  ", locExpsBuffer[i]);
+//			printf("\n\n");
+//
+//			for (int i=0; i<EXPSIZE; i++)
+//				printf("%f  ", othersLocExps[(parent->child_id + dest)*EXPSIZE + i]);
+//			printf("\n\n");
 		}
 
 		for(int c = 0; c < nchildren; ++c)
@@ -176,16 +235,16 @@ namespace Tree
 		}
 	}
 
-	const char *int_to_binary(int x)
+	const char *int_to_binary(long long x)
 	{
-		char *b = new char[33];
+		char *b = new char[65];
+		std::fill(b, b+64, '\0');
 		char *p = b;
 
-		for (unsigned int z = (1 << 31); z > (1 << 16); z >>= 1)
+		for (unsigned long long z = (1ll << 63); z > (1ll << 43); z >>= 1)
 		{
 			*(p++) = ((x & z) == z) ? '1' : '0';
 		}
-		b[32] = '\0';
 
 		return b;
 	}
@@ -193,58 +252,139 @@ namespace Tree
 	void Tree::findNearestNeighs()
 	{
 		// Sort the morton codes of all the nodes for fast search
-		std::vector< std::pair<int, int> > keys2nodes(curNNodes);
+		keys2nodes.resize(curNNodes);
 		for (int i=0; i<curNNodes; i++)
 			keys2nodes[i] = {nodes[i].morton_id, i};
-		std::sort(keys2nodes.begin(), keys2nodes.end());
+		std::sort(keys2nodes.begin(), keys2nodes.end(), [&] (auto& a, auto& b) -> bool {
+				if (a.first < b.first) return true;
+				if (a.first == b.first) return nodes[a.second].level < nodes[b.second].level;
+				return false;
+		});
 
-		for (int i=0; i<curNNodes; i++)
+		for (int nodeid=0; nodeid<curNNodes; nodeid++)
 		{
-			auto node = nodes+i;
+			auto node = nodes+nodeid;
 
 			if (node->child_id == 0)  // is leaf?
 			{
 				int xcode, ycode, zcode;
 				mortonDecode(node->morton_id, xcode, ycode, zcode);
 
-				//printf("node code %s (%3d  %3d  %3d) -->  \n", int_to_binary(node->morton_id), xcode, ycode, zcode);
+				//printf("nodecode %s (%2d) (%3d  %3d  %3d) -->  \n", int_to_binary(node->morton_id), node->level, xcode, ycode, zcode);
 
 				// Check all the directions
 				int count = 0;
-				int sh = neighsProximity * (1 << (LMAX - node->level));
-				for (int x = xcode-sh; x <= xcode+sh; x+=sh)
-					for (int y = ycode-sh; y <= ycode+sh; y+=sh)
-						for (int z = zcode-sh; z <= zcode+sh; z+=sh)
+				int sh = (1 << (LMAX - node->level));
+				int lim = neighsProximity * sh;
+				for (int x = xcode-lim; x <= xcode+lim; x+=sh)
+					for (int y = ycode-lim; y <= ycode+lim; y+=sh)
+						for (int z = zcode-lim; z <= zcode+lim; z+=sh)
 						{
 							if (x < 0 || x >= (1 << LMAX) ||
-								y < 0 || y >= (1 << LMAX) ||
-								z < 0 || z >= (1 << LMAX) ||
-								(x==0 && y==0 && z==0) )  continue;
+									y < 0 || y >= (1 << LMAX) ||
+									z < 0 || z >= (1 << LMAX) ||
+									(x==xcode && y==ycode && z==zcode) )  continue;
 
-							int neighCode = mortonEncode(x, y, z);
+							long long neighCode = mortonEncode(x, y, z);
 
 							// Find the node, which code is the biggest to be smaller or equal to nid
-							auto ptr = std::lower_bound(keys2nodes.begin(), keys2nodes.end(), std::pair<int, int>(neighCode, 0),
+							auto ptr = std::lower_bound(keys2nodes.begin(), keys2nodes.end(), std::pair<long long, int>(neighCode, 0),
 									[] (auto& a, auto& b) -> bool { return a.first <= b.first; } ) - 1;
-							neighbors[i*nNeighs + count] = ptr->second;
 
-							//printf("\t %s (%2d) (%3d %3d %3d -- %s)\n", int_to_binary(nodes[ptr->second].morton_id), nodes[ptr->second].level, x, y, z, int_to_binary(neighCode));
+							while (node->level < nodes[ptr->second].level)
+								ptr--;
+							neighbors[nodeid*nNeighs + count] = ptr->second;
+
+//							printf("\t %s (%2d) (%3d %3d %3d -- %s)\n", int_to_binary(nodes[ptr->second].morton_id),
+//									nodes[ptr->second].level, (x-xcode)/sh, (y-ycode)/sh, (z-zcode)/sh, int_to_binary(neighCode));
 
 							count++;
 						}
 
-				std::sort(neighbors+i*nNeighs, neighbors+i*nNeighs + count);
-				auto ptr = std::unique(neighbors+i*nNeighs, neighbors+i*nNeighs + count);
-				*ptr = -1;
+				std::sort(neighbors+nodeid*nNeighs, neighbors+nodeid*nNeighs + count);
+				numNeighs[nodeid] = std::unique(neighbors+nodeid*nNeighs, neighbors+nodeid*nNeighs + count) - (neighbors+nodeid*nNeighs);
 
-				int cur = i*nNeighs;
-//				while (neighbors[cur] != -1)
+//				for (int cur = nodeid*nNeighs; cur < nodeid*nNeighs + numNeighs[nodeid]; cur++)
 //				{
-//					printf("%d ", neighbors[cur++]);
+//					printf("%d ", neighbors[cur]);
 //				}
 //				printf("\n\n\n\n");
 			}
 		}
+	}
+
+	void Tree::subtractNeighsExps()
+	{
+		double xrels  alignas(32) [nchildren];
+		double yrels  alignas(32) [nchildren];
+		double zrels  alignas(32) [nchildren];
+
+		const double *ptrLocExps[nchildren];
+		double locExpsBuffer alignas(32) [nchildren*EXPSIZE];
+
+		for (int nodeid=0; nodeid<curNNodes; nodeid++)
+		{
+			auto node = nodes+nodeid;
+
+			if (node->child_id == 0)  // is leaf?
+			{
+
+				// Negate others local expansion, add the contribution
+				// from the neighbors, negate again
+				for (int i=0; i<EXPSIZE; i++)
+					othersLocExps[nodeid * EXPSIZE + i] = -othersLocExps[nodeid * EXPSIZE + i];
+
+				int c = 0;
+				for (int curNeigh = 0; curNeigh < numNeighs[nodeid]; curNeigh++)
+				{
+					//printf("%d\n", neighbors[nodeid*nNeighs + curNeigh]);
+					ptrLocExps[c] = myLocExps + neighbors[nodeid*nNeighs + curNeigh] * EXPSIZE;
+					xrels[c] = node->xcom;
+					yrels[c] = node->ycom;
+					zrels[c] = node->zcom;
+
+					if (c == nchildren-1)
+					{
+						transpose8xM(ptrLocExps, locExpsBuffer, EXPSIZE);
+						ispc::l2l(xrels, yrels, zrels, locExpsBuffer, othersLocExps + nodeid * EXPSIZE);
+						c = 0;
+					}
+					c++;
+				}
+
+				if (c != 0)
+				{
+					for (int i=c; i<nchildren; i++)
+					{
+						xrels[i] = 1.0;
+						yrels[i] = 1.0;
+						zrels[i] = 1.0;
+						ptrLocExps[i] = zeros;
+
+						transpose8xM(ptrLocExps, locExpsBuffer, EXPSIZE);
+						ispc::l2l(xrels, yrels, zrels, locExpsBuffer, othersLocExps + nodeid * EXPSIZE);
+					}
+				}
+
+				for (int i=0; i<EXPSIZE; i++)
+					othersLocExps[nodeid * EXPSIZE + i] = -othersLocExps[nodeid * EXPSIZE + i];
+			}
+		}
+	}
+
+	int Tree::findLeaf(const double xp, const double yp, const double zp)
+	{
+		const double factor = 1.0 / ext * (1 << LMAX);
+		int xid = std::floor((xp - xmin) * factor);
+		int yid = std::floor((yp - ymin) * factor);
+		int zid = std::floor((zp - ymin) * factor);
+
+		long long code = mortonEncode(xid, yid, zid);
+		auto ptr = std::lower_bound(keys2nodes.begin(), keys2nodes.end(), std::pair<long long, int>(code, 0),
+						[] (auto& a, auto& b) -> bool { return a.first <= b.first; } ) - 1;
+
+		//printf("%f %f %f --> %lld  --> %lld\n", xp, yp, zp, code, ptr->first);
+		return ptr->second;
 	}
 
 	void Tree::build( const int nsrc,
@@ -256,14 +396,16 @@ namespace Tree
 	{
 		if (nsrc > this->nsrc)
 		{
-			maxNodes = (nsrc + leafCapacity - 1) / leafCapacity * 20;
+			maxNodes = (nsrc + leafCapacity - 1) / leafCapacity * 200;
 
 			free(mortonIndex);
 			free(order);
 			free(nodes);
 			free(expansions);
-			free(locExps);
+			free(myLocExps);
+			free(othersLocExps);
 			free(neighbors);
+			free(numNeighs);
 			free(xsorted);
 			free(ysorted);
 			free(zsorted);
@@ -274,19 +416,18 @@ namespace Tree
 			posix_memalign((void **)&zsorted, 32, sizeof(double) * nsrc);
 			posix_memalign((void **)&qsorted, 32, sizeof(double) * nsrc);
 
-			posix_memalign((void **)&mortonIndex, 32, sizeof(int) * nsrc);
+			posix_memalign((void **)&mortonIndex, 32, sizeof(long long) * nsrc);
 			posix_memalign((void **)&order,       32, sizeof(int) * nsrc);
 			posix_memalign((void **)&neighbors,   32, sizeof(int) * maxNodes * nNeighs);
+			posix_memalign((void **)&numNeighs,   32, sizeof(int) * maxNodes);
 
-			posix_memalign((void **)&nodes,      32, sizeof(Node) * maxNodes);
-			posix_memalign((void **)&expansions, 32, sizeof(double) * EXPSIZE * maxNodes);
-			posix_memalign((void **)&locExps,    32, sizeof(double) * EXPSIZE * maxNodes);
-
+			posix_memalign((void **)&nodes,         32, sizeof(Node) * maxNodes);
+			posix_memalign((void **)&expansions,    32, sizeof(double) * EXPSIZE * maxNodes);
+			posix_memalign((void **)&myLocExps,     32, sizeof(double) * EXPSIZE * maxNodes);
+			posix_memalign((void **)&othersLocExps, 32, sizeof(double) * EXPSIZE * maxNodes);
 
 			this->nsrc = nsrc;
 		}
-
-		double ext, xmin, ymin, zmin;
 
 		for (int i=0; i<nsrc; i++)
 			order[i] = i;
@@ -317,11 +458,11 @@ namespace Tree
 			}
 		});
 
-		profiler.profile("Tree : summing expansions", [&]() {
+		profiler.profile("Tree : summing exps", [&]() {
 #pragma omp parallel
 #pragma omp single nowait
 			{
-				std::fill(locExps, locExps + EXPSIZE, 0);
+				std::fill(othersLocExps, othersLocExps + EXPSIZE, 0);
 				sumLocalExpsRecursive(0);
 			}
 		});
@@ -330,6 +471,8 @@ namespace Tree
 			findNearestNeighs();
 		});
 
-		// TODO: subtract neighbors' expansions
+		profiler.profile("Tree : subtract neighs", [&]() {
+			//	subtractNeighsExps();
+		});
 	}
 }

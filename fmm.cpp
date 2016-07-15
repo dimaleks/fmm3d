@@ -2,18 +2,20 @@
 #include <cassert>
 #include <cstring>
 #include <immintrin.h>
+#include <vector>
 
 #include "fmm.h"
 #include "e2p.h"
 #include "p2p.h"
+#include "l2p.h"
 #include "treehelper.h"
 
-#define LMAX 10
+#define LMAX 21
 
 FMM3D::FMM3D(double theta, int leafCapacity) :
 theta2(theta*theta), tree(leafCapacity), ne2p(0), np2p(0)
 {
-	memset(zeros, 0, EXPSIZE*sizeof(double));
+	std::fill(zeros, zeros + EXPSIZE, 0);
 }
 
 template<typename T>
@@ -51,10 +53,20 @@ inline void e2pWrapper(const double * xrel, const double * yrel, const double * 
 {
 	ispc::e2pForce(xrel, yrel, zrel, nexps, exps, fx, fy, fz);
 }
+
+inline void l2pWrapper(const double * xt, const double * yt, const double * zt, const int nTargets, const double * exps[], double * pot)
+{
+	ispc::l2p(xt, yt, zt, exps, nTargets, pot);
+}
+
+inline void l2pWrapper(const double * xrel, const double * yrel, const double * zrel, const double * exps, double * fx, double * fy, double * fz)
+{
+	//ispc::l2pForce(xrel, yrel, zrel, exps, fx, fy, fz);
+}
 // ********************************************
 
 template<typename... Args>
-void FMM3D::evaluate(const double xt,
+void FMM3D::evaluateLog(const double xt,
 		const double yt,
 		const double zt,
 		Args&... args)
@@ -140,6 +152,52 @@ void FMM3D::evaluate(const double xt,
 	}
 }
 
+//template<typename... Args>
+//void FMM3D::evaluate(const double xt,
+//		const double yt,
+//		const double zt,
+//		const double* &ptrExps,
+//		Args&... args)
+
+void FMM3D::evaluate(const double xt,
+		const double yt,
+		const double zt,
+		const double* &ptrExps,
+		double &pot)
+{
+	const int leaf = tree.findLeaf(xt, yt, zt);
+	//printf("%d:\n", leaf);
+	ptrExps = tree.othersLocExps + leaf*EXPSIZE;
+
+	double xx[] = {xt - tree.nodes[leaf].xcom};
+	double yy[] = {yt - tree.nodes[leaf].ycom};
+	double zz[] = {zt - tree.nodes[leaf].zcom};
+
+	std::vector<const double*> vec;
+	vec.push_back(ptrExps);
+
+	l2pWrapper(xx, yy, zz, 1, &vec[0], &pot);
+
+	// TODO: subtract COM
+
+	const int s = tree.nodes[leaf].part_start;
+	const int e = tree.nodes[leaf].part_end;
+	p2pWrapper(tree.xsorted + s, tree.ysorted + s,
+		tree.zsorted + s, tree.qsorted + s, e - s, xt, yt, zt, pot);
+
+//	int nId = 0;
+//	for (int nId = 0; nId < tree.getNumNeighs(leaf); nId++)
+//	{
+//		const int neigh = tree.getNeigh(leaf, nId);
+//		//printf("\t going to %d\n", neigh);
+//
+//		const int s = tree.nodes[neigh].part_start;
+//		const int e = tree.nodes[neigh].part_end;
+//		p2pWrapper(tree.xsorted + s, tree.ysorted + s,
+//			tree.zsorted + s, tree.qsorted + s, e - s, xt, yt, zt, args...);
+//	}
+}
+
 void FMM3D::buildTree(const int nsrc,
 		const double* __restrict const xsrc,
 		const double* __restrict const ysrc,
@@ -149,7 +207,7 @@ void FMM3D::buildTree(const int nsrc,
 	tree.build(nsrc, xsrc, ysrc, zsrc, qsrc, profiler);
 }
 
-void FMM3D::potential(  const int ndst,
+void FMM3D::potentialLog(  const int ndst,
 		const double* __restrict const xdst,
 		const double* __restrict const ydst,
 		const double* __restrict const zdst,
@@ -159,7 +217,24 @@ void FMM3D::potential(  const int ndst,
 	profiler.profile("Potential", [&]() {
 #pragma omp parallel for schedule(dynamic,4)
 		for(int i = 0; i < ndst; ++i)
-			evaluate(xdst[i], ydst[i], zdst[i], potential[i]);
+			evaluateLog(xdst[i], ydst[i], zdst[i], potential[i]);
+	});
+}
+
+void FMM3D::potential(  const int ndst,
+		const double* __restrict const xdst,
+		const double* __restrict const ydst,
+		const double* __restrict const zdst,
+		double* __restrict const potential)
+{
+	std::vector<const double*> exps(ndst);
+
+	profiler.profile("Potential", [&]() {
+#pragma omp parallel for schedule(dynamic,4)
+		for(int i = 0; i < ndst; ++i)
+			evaluate(xdst[i], ydst[i], zdst[i], exps[i], potential[i]);
+
+		//l2pWrapper(xdst, ydst, zdst, ndst, &exps[0], potential);
 	});
 }
 
@@ -175,6 +250,6 @@ void FMM3D::force(  const int ndst,
 	profiler.profile("Force", [&]() {
 #pragma omp parallel for schedule(dynamic,4)
 		for(int i = 0; i < ndst; ++i)
-			evaluate(xdst[i], ydst[i], zdst[i], xfrc[i], yfrc[i], zfrc[i]);
+			evaluateLog(xdst[i], ydst[i], zdst[i], xfrc[i], yfrc[i], zfrc[i]);
 	});
 }

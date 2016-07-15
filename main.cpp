@@ -51,7 +51,7 @@ void check(const double * ref, const double * res, const int N)
 
 void test(double theta, double tol, bool verify = true)
 {
-	const int nsrc = 1000000;
+	const int nsrc = 5000;
 	double *xsrc, *ysrc, *zsrc, *qsrc;
 
 	posix_memalign((void **)&xsrc, 32, sizeof(double) * nsrc);
@@ -61,9 +61,9 @@ void test(double theta, double tol, bool verify = true)
 
 	for (int i=0; i<nsrc; i++)
 	{
-//		xsrc[i] = drand48() - 0.5;
-//		ysrc[i] = drand48() - 0.5;
-//		zsrc[i] = drand48() - 0.5;
+		xsrc[i] = drand48() - 0.5;
+		ysrc[i] = drand48() - 0.5;
+		zsrc[i] = drand48() - 0.5;
 
 		double l = (drand48() - 0.5) * 1.4142;
 		xsrc[i] = l + (drand48() - 0.5) * 0.01;
@@ -74,7 +74,7 @@ void test(double theta, double tol, bool verify = true)
 	}
 
 
-	int ndst = 10000;
+	int ndst = 100;
 	double *xdst, *ydst, *zdst, *potentials;
 	double *xfrc, *yfrc, *zfrc;
 	posix_memalign((void **)&xdst, 32, sizeof(double) * ndst);
@@ -99,7 +99,7 @@ void test(double theta, double tol, bool verify = true)
 
 	printf("Testing %s with %d sources and %d targets (theta %.3e)...\n", "POTENTIAL", nsrc, ndst, theta);
 
-	FMM3D fmm(theta, 4000);
+	FMM3D fmm(0.5, 100);
 	const int iters = 1;
 	for (int n=0; n<iters; n++)
 	{
@@ -125,7 +125,7 @@ void test(double theta, double tol, bool verify = true)
 		posix_memalign((void **)&zref, 32, sizeof(double) * ndst);
 
 		const int OFFSET = 0;
-		const int JUMP = 1435;
+		const int JUMP = 1;
 
 #pragma omp parallel for
 		for(int i = OFFSET; i < ndst; i += JUMP)
@@ -176,9 +176,9 @@ void test(double theta, double tol, bool verify = true)
 		}
 
 		check(&pr[0], &p[0], p.size());
-		check(&xr[0], &x[0], p.size());
-		check(&yr[0], &y[0], p.size());
-		check(&zr[0], &z[0], p.size());
+//		check(&xr[0], &x[0], p.size());
+//		check(&yr[0], &y[0], p.size());
+//		check(&zr[0], &z[0], p.size());
 
 		free(pref);
 		free(xref);
@@ -202,7 +202,7 @@ int main(int argc, char ** argv)
 	double theta = 0.5;
 	bool verify = true;
 
-	_mm_setcsr( _mm_getcsr() | (1<<15) | (1<<6));
+	//_mm_setcsr( _mm_getcsr() | (1<<15) | (1<<6));
 
 	if (argc > 1)
 		theta = atof(argv[1]);

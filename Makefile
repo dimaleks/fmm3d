@@ -1,9 +1,9 @@
 order ?= 12
 ORDERFLAG = -DORDER=$(order)
 
-CXXFLAGS +=-g -fopenmp -fstrict-aliasing -march=native -mtune=native -O3 -std=c++14 -m64 -ffast-math
+CXXFLAGS +=-g -fopenmp -fstrict-aliasing -march=native -mtune=native -O0 -std=c++14 -m64
 LINKFLAGS+=-fopenmp -O3 -march=native -mtune=native -flto
-ISPCFLAGS+=-g -O3 --arch=x86-64 --target=host -wno-perf --opt=fast-math
+ISPCFLAGS+=-g -O3 --arch=x86-64 --target=host --opt=fast-math -wno-perf
 
 CXXFLAGS +=$(ORDERFLAG)
 ISPCFLAGS+=$(ORDERFLAG)
@@ -19,14 +19,13 @@ endif
 
 CXXFLAGS += -MP -MD
 
-ISPC_FROM_M4_FILES = e2p.ispc p2e.ispc
+ISPC_FROM_M4_FILES = e2p.ispc p2e.ispc e2e.ispc e2l.ispc l2l.ispc l2p.ispc
 ISPC_FILES = treekernels.ispc p2p.ispc
-CPP_FROM_M4_FILES = e2e.cpp e2l.cpp l2l.cpp
 CPP_FILES = main.cpp tree.cpp treehelper.cpp tasksys.cpp fmm.cpp
 
 ISPC_OBJ_FILES = $(patsubst %.ispc,%.ispco,$(ISPC_FILES) $(ISPC_FROM_M4_FILES))
 ISPC_H_FILES   = $(patsubst %.ispco,%.h,$(ISPC_OBJ_FILES))
-CPP_OBJ_FILES  = $(patsubst %.cpp,%.o,$(CPP_FILES) $(CPP_FROM_M4_FILES))
+CPP_OBJ_FILES  = $(patsubst %.cpp,%.o,$(CPP_FILES))
 
 all: fmm
 
@@ -55,7 +54,7 @@ fmm: $(ISPC_OBJ_FILES) $(CPP_OBJ_FILES)
 	m4 $(ORDERFLAG) $< > $@
 
 clean:
-	rm -f *.o *.d $(ISPC_FROM_M4_FILES) $(CPP_FROM_M4_FILES) *.ispco fmm
+	rm -f *.o *.d $(ISPC_FROM_M4_FILES) *.ispco fmm
 	
 
 ifneq "$(MAKECMDGOALS)" "clean"
