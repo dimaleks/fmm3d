@@ -173,6 +173,8 @@ void FMM3D::evaluate(const double xt,
 	double yy[] = {yt - tree.nodes[leaf].ycom};
 	double zz[] = {zt - tree.nodes[leaf].zcom};
 
+	printf("%f %f %f\n", xx[0], yy[0], zz[0]);
+
 	std::vector<const double*> vec;
 	vec.push_back(ptrExps);
 
