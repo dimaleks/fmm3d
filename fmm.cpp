@@ -173,7 +173,7 @@ void FMM3D::evaluate(const double xt,
 	double yy[] = {yt - tree.nodes[leaf].ycom};
 	double zz[] = {zt - tree.nodes[leaf].zcom};
 
-	printf("%f %f %f\n", xx[0], yy[0], zz[0]);
+	//printf("%f %f %f\n", xx[0], yy[0], zz[0]);
 
 	std::vector<const double*> vec;
 	vec.push_back(ptrExps);
@@ -184,8 +184,8 @@ void FMM3D::evaluate(const double xt,
 
 	const int s = tree.nodes[leaf].part_start;
 	const int e = tree.nodes[leaf].part_end;
-	p2pWrapper(tree.xsorted + s, tree.ysorted + s,
-		tree.zsorted + s, tree.qsorted + s, e - s, xt, yt, zt, pot);
+//	p2pWrapper(tree.xsorted + s, tree.ysorted + s,
+//		tree.zsorted + s, tree.qsorted + s, e - s, xt, yt, zt, pot);
 
 //	int nId = 0;
 //	for (int nId = 0; nId < tree.getNumNeighs(leaf); nId++)
@@ -196,7 +196,7 @@ void FMM3D::evaluate(const double xt,
 //		const int s = tree.nodes[neigh].part_start;
 //		const int e = tree.nodes[neigh].part_end;
 //		p2pWrapper(tree.xsorted + s, tree.ysorted + s,
-//			tree.zsorted + s, tree.qsorted + s, e - s, xt, yt, zt, args...);
+//			tree.zsorted + s, tree.qsorted + s, e - s, xt, yt, zt, pot);
 //	}
 }
 

@@ -50,13 +50,13 @@ export void e2e(
 
 		const double xxyy  = x*x + y*y;
 		const double rho2  = xxyy + z*z;
-		const double rho   = sqrt(rho2);
+		const double rho   = sqrt(rho2 + __DBL_EPSILON__*10);
 		const double rho_1 = 1.0d / rho;
 
 		const double costheta = z * rho_1;
 		const double sintheta = sqrt(1.0d - costheta*costheta);
 
-		const double phiMag_1 = rsqrt(xxyy);
+		const double phiMag_1 = rsqrt(xxyy + __DBL_EPSILON__*10);
 		double mag_1 = 1.0d;
 		double phi_x = 1.0d;
 		double phi_y = 0.0d;

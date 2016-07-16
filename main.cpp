@@ -31,8 +31,8 @@ void check(const double * ref, const double * res, const int N)
 		const double maxval = std::max(fabs(res[i]), fabs(ref[i]));
 		const double relerr = err/std::max(1e-3, maxval);
 
-//		if (fabs(relerr) >= tol && fabs(err) >= tol)
-//			printf("%3d: %16.8e vs %16.8e     err:    %16.8e %16.8e\n", i, res[i], ref[i], err, relerr);
+		if (fabs(relerr) >= tol && fabs(err) >= tol)
+			printf("%3d: %16.8e vs %16.8e     err:    %16.8e %16.8e\n", i, res[i], ref[i], err, relerr);
 
 		l1 += fabs(err);
 		l1_rel += fabs(relerr);
@@ -51,7 +51,7 @@ void check(const double * ref, const double * res, const int N)
 
 void test(double theta, double tol, bool verify = true)
 {
-	const int nsrc = 5000;
+	const int nsrc = 2;
 	double *xsrc, *ysrc, *zsrc, *qsrc;
 
 	posix_memalign((void **)&xsrc, 32, sizeof(double) * nsrc);
@@ -65,16 +65,25 @@ void test(double theta, double tol, bool verify = true)
 		ysrc[i] = drand48() - 0.5;
 		zsrc[i] = drand48() - 0.5;
 
-		double l = (drand48() - 0.5) * 1.4142;
-		xsrc[i] = l + (drand48() - 0.5) * 0.01;
-		ysrc[i] = l + (drand48() - 0.5) * 0.01;
-		zsrc[i] = l + (drand48() - 0.5) * 0.01;
+//		double l = (drand48() - 0.5) * 1.4142;
+//		xsrc[i] = l + (drand48() - 0.5) * 0.01;
+//		ysrc[i] = l + (drand48() - 0.5) * 0.01;
+//		zsrc[i] = l + (drand48() - 0.5) * 0.01;
 
 		qsrc[i] = 0.1*(drand48() - 0.5);
 	}
+	xsrc[0] = 0.4;
+	ysrc[0] = 0.4;
+	zsrc[0] = 0.4;
 
+	xsrc[1] = -0.4;
+	ysrc[1] = -0.4;
+	zsrc[1] = -0.4;
 
-	int ndst = 100;
+	for (int i=0; i<nsrc; i++)
+		printf("%e %e %e  %e\n", xsrc[i], ysrc[i], zsrc[i], qsrc[i]);
+
+	int ndst = 10;
 	double *xdst, *ydst, *zdst, *potentials;
 	double *xfrc, *yfrc, *zfrc;
 	posix_memalign((void **)&xdst, 32, sizeof(double) * ndst);
@@ -99,7 +108,7 @@ void test(double theta, double tol, bool verify = true)
 
 	printf("Testing %s with %d sources and %d targets (theta %.3e)...\n", "POTENTIAL", nsrc, ndst, theta);
 
-	FMM3D fmm(0.5, 100);
+	FMM3D fmm(0.5, 1);
 	const int iters = 1;
 	for (int n=0; n<iters; n++)
 	{

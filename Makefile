@@ -17,6 +17,12 @@ ifeq ($(CXX),$(filter $(CXX),icc icpc))
 	LINKFLAGS+=-L$(TBBPATH)/lib/ -ltbb -Wl,-rpath,$(TBBPATH)/lib/
 endif
 
+ifneq (,$(findstring clang,$(CXX)))
+	OMPPATH=/usr/local/Cellar/libiomp/20150701
+	CXXFLAGS+=-I$(OMPPATH)/include/libiomp/
+	LINKFLAGS+=-L$(OMPPATH)/lib/ -Wl,-rpath,$(OMPPATH)/lib/
+endif
+
 CXXFLAGS += -MP -MD
 
 ISPC_FROM_M4_FILES = e2p.ispc p2e.ispc e2e.ispc e2l.ispc l2l.ispc l2p.ispc

@@ -67,9 +67,9 @@ int main()
 		for (int j=0; j<8; j++)
 			srcexps[i*8 + j] = srcexp[i];
 
-	double xr alignas(32) [8] = {0.0, 1, 1, 1, 1, 1, 1, 1};
+	double xr alignas(32) [8] = {1.3, 1, 1, 1, 1, 1, 1, 1};
 	double yr alignas(32) [8] = {1.2, 1, 1, 1, 1, 1, 1, 1};
-	double zr alignas(32) [8] = {0.0, 1, 1, 1, 1, 1, 1, 1};
+	double zr alignas(32) [8] = {-1.1, 1, 1, 1, 1, 1, 1, 1};
 
 	Profiler prof;
 
@@ -97,9 +97,9 @@ int main()
 	std::vector<const double*> ptrExps;
 	ptrExps.push_back(movedexp);
 
-	double xt alignas(32) [] = {0.1};
-	double yt alignas(32) [] = {0.1};
-	double zt alignas(32) [] = {0.1};
+	double xt alignas(32) [] = {0.0};
+	double yt alignas(32) [] = {0.0};
+	double zt alignas(32) [] = {0.0};
 	double pot alignas(32) [] = {0};
 
 	ispc::l2p(xt, yt, zt, &ptrExps[0], 1, pot);
