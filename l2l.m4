@@ -21,27 +21,27 @@ export void l2l(
 	const uniform double xrels[],
 	const uniform double yrels[],
 	const uniform double zrels[],
-	const uniform double srcexps[],
+	const uniform double srcexp[],
 	double uniform dstexps[])
 {
-	double Mre[ORDER][ORDER];
-	double Mim[ORDER][ORDER];
+	double Lre[ORDER][ORDER];
+	double Lim[ORDER][ORDER];
 
 	LUNROLL(n, 0, ORDER-1, `LUNROLL(m, 0, n, `
-	Mre[`'n`']['`m'`] = 0;
-	Mim[`'n`']['`m'`] = 0;')')
+	Lre[`'n`']['`m'`] = 0;
+	Lim[`'n`']['`m'`] = 0;')')
+
+	uniform double Ore[ORDER][ORDER];
+	uniform double Oim[ORDER][ORDER];
+
+	LUNROLL(n, 0, ORDER-1, `LUNROLL(m, 0, n, `
+	Ore[`'n`']['`m'`] = srcexp[eval( (n-1) * (n+2) + 2 + m )];
+	Oim[`'n`']['`m'`] = srcexp[eval( (n-1) * (n+2) + 3 + n + m )];')')
 
 	foreach(i=0...8)
 	{
-		double Ore[ORDER][ORDER];
-		double Oim[ORDER][ORDER];
-
 		double Yre[ORDER][ORDER];
 		double Yim[ORDER][ORDER];
-
-		LUNROLL(n, 0, ORDER-1, `LUNROLL(m, 0, n, `
-		Ore[`'n`']['`m'`] = srcexps[eval( ((n-1) * (n+2) + 2 + m)*8 ) + i];
-		Oim[`'n`']['`m'`] = srcexps[eval( ((n-1) * (n+2) + 3 + n + m)*8 ) + i];')')
 
 		// Set up the arguments of the harmonic functions
 		const double x = xrels[i];
@@ -89,7 +89,7 @@ export void l2l(
 			')')
 		}
 
-		// Now begin conversion to local
+		// Now begin translation
 		//
 		// First double loop with k and j
 		// Second, with n and m, unrolled
@@ -99,10 +99,10 @@ export void l2l(
 			for (uniform int k=0; k<=j; k++)
 			{
 				LUNROLL(n, 0, ORDER-1, `LUNROLL(m, -n, n, `
-				if (abs(m-k) <= abs(n-j) && n >= j)
+				if (abs(m-k) <= n-j && n >= j)
 				{
 					const double f =
-							( (abs(m) - abs(k-(m)) - abs(k)) % 4 == 0 ? 1.0d : -1.0d ) * ( (n+j) % 2 == 0 ? 1.0d : -1.0d ) *
+							( (abs(m) - abs((m)-k) - abs(k)) % 4 == 0 ? 1.0d : -1.0d ) * ( (n+j) % 2 == 0 ? 1.0d : -1.0d ) *
 							A[n-j][abs(m-k)] * A[j][k] / A[n][abs(m)] * rhos[n-j];
 
 					const double reO = Ore[n][m4abs(m)];
@@ -111,16 +111,16 @@ export void l2l(
 					const double reY = Yre[n-j][abs(m-k)];
 					const double imY = ((m-k) < 0) ? -Yim[n-j][abs(m-k)] : Yim[n-j][abs(m-k)];
 
-					Mre[j][k] += f * (reY*reO - imY*imO);
-					Mim[j][k] += f * (reY*imO + imY*reO);
+					Lre[j][k] += f * (reY*reO - imY*imO);
+					Lim[j][k] += f * (reY*imO + imY*reO);
 				}
 				')')
 			}
 		}
-	}
 
 	LUNROLL(n, 0, ORDER-1, `LUNROLL(m, 0, n, `
-	dstexps[eval( (n-1) * (n+2) + 2 + m )]     += reduce_add(Mre[`'n`'][`'m`']);
-	dstexps[eval( (n-1) * (n+2) + 3 + n + m )] += reduce_add(Mim[`'n`'][`'m`']);
+	dstexps[eval( ((n-1) * (n+2) + 2 + m)*8 ) + i]     += Lre[`'n`'][`'m`'];
+	dstexps[eval( ((n-1) * (n+2) + 3 + n + m)*8 ) + i] += Lim[`'n`'][`'m`'];
 	')')
+	}
 }

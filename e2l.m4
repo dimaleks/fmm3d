@@ -22,22 +22,22 @@ export void e2l(
 	const uniform double yrels[],
 	const uniform double zrels[],
 	const uniform double srcexps[],
-	double uniform dstexps[])
+	double uniform dstexp[])
 {
+	double Lre[ORDER][ORDER];
+	double Lim[ORDER][ORDER];
+
+	LUNROLL(n, 0, ORDER-1, `LUNROLL(m, 0, n, `
+	Lre[`'n`']['`m'`] = 0;
+	Lim[`'n`']['`m'`] = 0;')')
+
 	foreach(i=0...8)
 	{
-		double Lre[ORDER][ORDER];
-		double Lim[ORDER][ORDER];
-
 		double Ore[ORDER][ORDER];
 		double Oim[ORDER][ORDER];
 
 		double Yre[2*ORDER-1][2*ORDER-1];
 		double Yim[2*ORDER-1][2*ORDER-1];
-
-		LUNROLL(n, 0, ORDER-1, `LUNROLL(m, 0, n, `
-		Lre[`'n`']['`m'`] = 0;
-		Lim[`'n`']['`m'`] = 0;')')
 
 		LUNROLL(n, 0, ORDER-1, `LUNROLL(m, 0, n, `
 		Ore[`'n`']['`m'`] = srcexps[eval( ((n-1) * (n+2) + 2 + m)*8 ) + i];
@@ -117,10 +117,10 @@ export void e2l(
 				')')
 			}
 		}
-
-		LUNROLL(n, 0, ORDER-1, `LUNROLL(m, 0, n, `
-		dstexps[eval( ((n-1) * (n+2) + 2 + m)*8) + i]     = Lre[`'n`'][`'m`'];
-		dstexps[eval( ((n-1) * (n+2) + 3 + n + m)*8) + i] = Lim[`'n`'][`'m`'];
-		')')
 	}
+
+	LUNROLL(n, 0, ORDER-1, `LUNROLL(m, 0, n, `
+	dstexp[eval( (n-1) * (n+2) + 2 + m )]     += reduce_add(Lre[`'n`'][`'m`']);
+	dstexp[eval( (n-1) * (n+2) + 3 + n + m )] += reduce_add(Lim[`'n`'][`'m`']);
+	')')
 }

@@ -10,6 +10,8 @@
 #pragma once
 
 #include "profiler.h"
+#include <vector>
+#include <set>
 
 #define EXPSIZE  (ORDER * (ORDER+1))
 
@@ -50,18 +52,16 @@ namespace Tree
 		double ext, xmin, ymin, zmin;
 		long long *mortonIndex;
 		int *order;
-		int *neighbors;
-		int *numNeighs;
+		std::vector<std::set<int>> neighbors;
 
 		std::vector< std::pair<long long, int> > keys2nodes;
 
 		int curNNodes, nsrc;
 
 		void buildRecursive(int nodeid);
-		void sumLocalExpsRecursive(int nodeid);
+		void computeLocalExpsRecursive(int nodeid);
 		void findNearestNeighs();
-		void subtractNeighsExps();
-
+		
 	public:
 
 		Node   *nodes;
@@ -76,16 +76,10 @@ namespace Tree
 
 		int findLeaf(const double xp, const double yp, const double zp);
 
-		inline int getNeigh(int node, int nId)
+		inline auto getNeigh(int node)
 		{
-			return neighbors[node * nNeighs + nId];
+			return neighbors[node];
 		}
-
-		inline int getNumNeighs(int nId)
-		{
-			return numNeighs[nId];
-		}
-
 
 		void build(	const int nsrc,
 					const double* __restrict const xsrc,

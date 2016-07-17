@@ -34,7 +34,7 @@ namespace ispc { /* namespace */
 #if defined(__cplusplus) && (! defined(__ISPC_NO_EXTERN_C) || !__ISPC_NO_EXTERN_C )
 extern "C" {
 #endif // __cplusplus
-    extern void l2l(const double * xrels, const double * yrels, const double * zrels, const double * srcexps, double * dstexps);
+    extern void l2l(const double * xrels, const double * yrels, const double * zrels, const double * srcexp, double * dstexps);
 #if defined(__cplusplus) && (! defined(__ISPC_NO_EXTERN_C) || !__ISPC_NO_EXTERN_C )
 } /* end extern C */
 #endif // __cplusplus
