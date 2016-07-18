@@ -17,6 +17,46 @@
 
 namespace Tree
 {
+	template<typename T, int alignTo = 64>
+	class alignedVector
+	{
+		static constexpr double safetyFactor = 1.2;
+		static constexpr int    safetyExtra  = 10;
+		
+		T* data;
+		int _size;
+		int capacity;
+		
+	public:
+		inline alignedVector(int n=0) :
+			_size(n), capacity(safetyFactor * n + safetyExtra)
+		{
+			posix_memalign((void **)&data, alignTo, sizeof(T) * capacity);
+		}
+		
+		inline ~alignedVector()
+		{
+			free(data);
+		}
+		
+		inline void resize(int n)
+		{
+			if (n <= capacity)
+				_size = n;
+			else
+			{
+				capacity = safetyFactor * n + safetyExtra;
+				_size = n;
+				free(data);
+				posix_memalign((void **)&data, alignTo, sizeof(T) * capacity);
+			}
+		}
+		
+		inline T& operator[] (int i) {return data[i];}
+		inline T* ptr()   {return data;}
+		inline int size() {return _size;}
+	};
+	
 	struct Node
 	{
 		int part_start, part_end;
@@ -40,9 +80,9 @@ namespace Tree
 
 	class Tree
 	{
-		static const int nchildren = 8;
-		static const int neighsProximity = 1;
-		static const int nNeighs = (2*neighsProximity + 1) * (2*neighsProximity + 1) * (2*neighsProximity + 1) - 1;
+		static constexpr int nchildren = 8;
+		static constexpr int neighsProximity = 1;
+		static constexpr int nNeighs = (2*neighsProximity + 1) * (2*neighsProximity + 1) * (2*neighsProximity + 1) - 1;
 
 		double zeros alignas(32) [EXPSIZE];
 
@@ -50,13 +90,13 @@ namespace Tree
 		int leafCapacity;
 
 		double ext, xmin, ymin, zmin;
-		long long *mortonIndex;
-		int *order;
-		std::vector<std::set<int>> neighbors;
+		alignedVector<long long> mortonIndex;
+		alignedVector<int> order;
 
+		std::vector<std::set<int>> neighbors;
 		std::vector< std::pair<long long, int> > keys2nodes;
 
-		int curNNodes, nsrc;
+		int curNNodes;
 
 		void buildRecursive(int nodeid);
 		void computeLocalExpsRecursive(int nodeid);
@@ -64,19 +104,17 @@ namespace Tree
 		
 	public:
 
-		Node   *nodes;
-		double *xsorted, *ysorted, *zsorted, *qsorted;
-		double *expansions;
-		double *myLocExps;
-		double *othersLocExps;
+		alignedVector<Node>   nodes;
+		alignedVector<double> xsorted, ysorted, zsorted, qsorted;
+		alignedVector<double> expansions;
+		alignedVector<double> locExps;
 
 
 		Tree(const int leafCapacity);
-		~Tree();
 
 		int findLeaf(const double xp, const double yp, const double zp);
 
-		inline auto getNeigh(int node)
+		inline auto& getNeigh(int node)
 		{
 			return neighbors[node];
 		}

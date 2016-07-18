@@ -2,8 +2,8 @@ order ?= 12
 ORDERFLAG = -DORDER=$(order)
 
 CXXFLAGS +=-g -fopenmp -fstrict-aliasing -march=native -mtune=native -O0 -std=c++14 -m64
-LINKFLAGS+=-fopenmp -O3 -march=native -mtune=native -flto
-ISPCFLAGS+=-g -O3 --arch=x86-64 --target=host --opt=fast-math -wno-perf
+LINKFLAGS+=-fopenmp -O0 -march=native -mtune=native -flto
+ISPCFLAGS+=-g -O0 --arch=x86-64 --target=host --opt=fast-math -wno-perf
 
 CXXFLAGS +=$(ORDERFLAG)
 ISPCFLAGS+=$(ORDERFLAG)

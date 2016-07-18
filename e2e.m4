@@ -28,8 +28,8 @@ export void e2e(
 	double Mim[ORDER][ORDER];
 
 	LUNROLL(n, 0, ORDER-1, `LUNROLL(m, 0, n, `
-	Mre[`'n`']['`m'`] = 0;
-	Mim[`'n`']['`m'`] = 0;')')
+	Mre[n][m] = 0;
+	Mim[n][m] = 0;')')
 
 	foreach(i=0...8)
 	{
@@ -40,8 +40,8 @@ export void e2e(
 		double Yim[ORDER][ORDER];
 
 		LUNROLL(n, 0, ORDER-1, `LUNROLL(m, 0, n, `
-		Ore[`'n`']['`m'`] = srcexps[eval( ((n-1) * (n+2) + 2 + m)*8 ) + i];
-		Oim[`'n`']['`m'`] = srcexps[eval( ((n-1) * (n+2) + 3 + n + m)*8 ) + i];')')
+		Ore[n][m] = srcexps[eval( ((n-1) * (n+2) + 2 + m)*8 ) + i];
+		Oim[n][m] = srcexps[eval( ((n-1) * (n+2) + 3 + n + m)*8 ) + i];')')
 
 		// Set up the arguments of the harmonic functions
 		const double x = xrels[i];
@@ -84,8 +84,8 @@ export void e2e(
 			// Precompute the harmonics
 			LUNROLL(n, 0, ORDER-1, `LUNROLL(m, 0, n, `
 			const double absY_`'n`'_`'m`' = Y_`'n`'_`'m`'(sintheta, costheta);
-			Yre[`'n`'][`'m`'] = absY_`'n`'_`'m`' * cosphi_`'m;
-			Yim[`'n`'][`'m`'] = absY_`'n`'_`'m`' * sinphi_`'m;
+			Yre[n][m] = absY_`'n`'_`'m`' * cosphi_`'m;
+			Yim[n][m] = absY_`'n`'_`'m`' * sinphi_`'m;
 			')')
 		}
 
@@ -119,7 +119,7 @@ export void e2e(
 	}
 
 	LUNROLL(n, 0, ORDER-1, `LUNROLL(m, 0, n, `
-	dstexps[eval( (n-1) * (n+2) + 2 + m )]     = reduce_add(Mre[`'n`'][`'m`']);
-	dstexps[eval( (n-1) * (n+2) + 3 + n + m )] = reduce_add(Mim[`'n`'][`'m`']);
+	dstexps[eval( (n-1) * (n+2) + 2 + m )]     = reduce_add(Mre[n][m]);
+	dstexps[eval( (n-1) * (n+2) + 3 + n + m )] = reduce_add(Mim[n][m]);
 	')')
 }

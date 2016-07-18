@@ -87,7 +87,7 @@ void FMM3D::evaluateLog(const double xt,
 	while(stackentry > -1)
 	{
 		const int nodeid = stack[stackentry--];
-		auto node = tree.nodes + nodeid;
+		auto node = tree.nodes.ptr() + nodeid;
 
 		assert(nodeid < node->child_id || node->child_id == 0);
 
@@ -102,7 +102,7 @@ void FMM3D::evaluateLog(const double xt,
 			yrels[bufcount] = yr;
 			zrels[bufcount] = zr;
 			qs[bufcount] = node->Q;
-			exps[bufcount] = tree.expansions + EXPSIZE * nodeid;
+			exps[bufcount] = tree.expansions.ptr() + EXPSIZE * nodeid;
 
 			++bufcount;
 
@@ -122,8 +122,8 @@ void FMM3D::evaluateLog(const double xt,
 				const int s = node->part_start;
 				const int e = node->part_end;
 
-				p2pWrapper(tree.xsorted + s, tree.ysorted + s,
-						tree.zsorted + s, tree.qsorted + s, e - s, xt, yt, zt, args...);
+				p2pWrapper(tree.xsorted.ptr() + s, tree.ysorted.ptr() + s,
+						tree.zsorted.ptr() + s, tree.qsorted.ptr() + s, e - s, xt, yt, zt, args...);
 				np2p += e-s;
 			}
 			else
@@ -165,13 +165,15 @@ void FMM3D::evaluate(const double xt,
 		const double* &ptrExps,
 		double &pot)
 {
+	static int nnn = 0;
 	const int leaf = tree.findLeaf(xt, yt, zt);
-	//printf("%d:\n", leaf);
-	ptrExps = tree.othersLocExps + leaf*EXPSIZE;
+	ptrExps = tree.locExps.ptr() + leaf*EXPSIZE;
+	printf("%d:  %d\n", nnn++, leaf);
 
 	double xx[] = {xt - tree.nodes[leaf].xcom};
 	double yy[] = {yt - tree.nodes[leaf].ycom};
 	double zz[] = {zt - tree.nodes[leaf].zcom};
+	pot = 0;
 
 	//printf("%f %f %f\n", xx[0], yy[0], zz[0]);
 
@@ -180,24 +182,15 @@ void FMM3D::evaluate(const double xt,
 
 	l2pWrapper(xx, yy, zz, 1, &vec[0], &pot);
 
-	// TODO: subtract COM
-
-	const int s = tree.nodes[leaf].part_start;
-	const int e = tree.nodes[leaf].part_end;
-//	p2pWrapper(tree.xsorted + s, tree.ysorted + s,
-//		tree.zsorted + s, tree.qsorted + s, e - s, xt, yt, zt, pot);
-
-//	int nId = 0;
-//	for (int nId = 0; nId < tree.getNumNeighs(leaf); nId++)
-//	{
-//		const int neigh = tree.getNeigh(leaf, nId);
-//		//printf("\t going to %d\n", neigh);
-//
-//		const int s = tree.nodes[neigh].part_start;
-//		const int e = tree.nodes[neigh].part_end;
-//		p2pWrapper(tree.xsorted + s, tree.ysorted + s,
-//			tree.zsorted + s, tree.qsorted + s, e - s, xt, yt, zt, pot);
-//	}
+	const auto neighbors = tree.getNeigh(leaf);
+	printf("");
+	for (int nId : neighbors)
+	{
+		const int s = tree.nodes[nId].part_start;
+		const int e = tree.nodes[nId].part_end;
+		p2pWrapper(tree.xsorted.ptr() + s, tree.ysorted.ptr() + s,
+			tree.zsorted.ptr() + s, tree.qsorted.ptr() + s, e - s, xt, yt, zt, pot);
+	}
 }
 
 void FMM3D::buildTree(const int nsrc,
@@ -232,12 +225,40 @@ void FMM3D::potential(  const int ndst,
 	std::vector<const double*> exps(ndst);
 
 	profiler.profile("Potential", [&]() {
-#pragma omp parallel for schedule(dynamic,4)
+		//#pragma omp parallel for schedule(dynamic,4)
 		for(int i = 0; i < ndst; ++i)
+			
 			evaluate(xdst[i], ydst[i], zdst[i], exps[i], potential[i]);
 
 		//l2pWrapper(xdst, ydst, zdst, ndst, &exps[0], potential);
 	});
+	
+	for (int i=0; i<73; i++)
+	{
+		auto& myset = tree.getNeigh(i);
+		double s = 0;
+		double xd = tree.nodes[i].xcom;
+		double yd = tree.nodes[i].ycom;
+		double zd = tree.nodes[i].zcom;
+		
+		for (int j=0; j<tree.xsorted.size(); j++)
+		{
+			int ll = tree.findLeaf(tree.xsorted[j], tree.ysorted[j], tree.zsorted[j]);
+			if (myset.find(ll) == myset.end())
+			{
+				const double xr = xd - tree.xsorted[j];
+				const double yr = yd - tree.ysorted[j];
+				const double zr = zd - tree.zsorted[j];
+				const double r2 = xr*xr + yr*yr + zr*zr;
+				
+				double p = tree.qsorted[j] / sqrt(r2+1e-15);
+				s += (fabs(r2) > 1e-15) ? p : 0;
+				
+				if (i == 38) printf("%f %f %f %f from %d adds %f\n", tree.xsorted[j], tree.ysorted[j], tree.zsorted[j], tree.qsorted[j], ll, p);
+			}
+		}
+		printf("Node %d, pot: %f\n", i, s);
+	}
 }
 
 void FMM3D::force(  const int ndst,

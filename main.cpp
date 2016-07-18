@@ -51,7 +51,7 @@ void check(const double * ref, const double * res, const int N)
 
 void test(double theta, double tol, bool verify = true)
 {
-	const int nsrc = 2;
+	const int nsrc = 140;
 	double *xsrc, *ysrc, *zsrc, *qsrc;
 
 	posix_memalign((void **)&xsrc, 32, sizeof(double) * nsrc);
@@ -72,13 +72,13 @@ void test(double theta, double tol, bool verify = true)
 
 		qsrc[i] = 0.1*(drand48() - 0.5);
 	}
-	xsrc[0] = 0.4;
-	ysrc[0] = 0.4;
-	zsrc[0] = 0.4;
+	xsrc[0] = 0.5;
+	ysrc[0] = 0.5;
+	zsrc[0] = 0.5;
 
-	xsrc[1] = -0.4;
-	ysrc[1] = -0.4;
-	zsrc[1] = -0.4;
+	xsrc[1] = -0.5;
+	ysrc[1] = -0.5;
+	zsrc[1] = -0.5;
 
 	for (int i=0; i<nsrc; i++)
 		printf("%e %e %e  %e\n", xsrc[i], ysrc[i], zsrc[i], qsrc[i]);
@@ -211,7 +211,7 @@ int main(int argc, char ** argv)
 	double theta = 0.5;
 	bool verify = true;
 
-	//_mm_setcsr( _mm_getcsr() | (1<<15) | (1<<6));
+	_mm_setcsr( _mm_getcsr() | (1<<15) | (1<<6));
 
 	if (argc > 1)
 		theta = atof(argv[1]);

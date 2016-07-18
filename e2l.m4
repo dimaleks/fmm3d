@@ -28,8 +28,8 @@ export void e2l(
 	double Lim[ORDER][ORDER];
 
 	LUNROLL(n, 0, ORDER-1, `LUNROLL(m, 0, n, `
-	Lre[`'n`']['`m'`] = 0;
-	Lim[`'n`']['`m'`] = 0;')')
+	Lre[n][m] = 0;
+	Lim[n][m] = 0;')')
 
 	foreach(i=0...8)
 	{
@@ -40,8 +40,8 @@ export void e2l(
 		double Yim[2*ORDER-1][2*ORDER-1];
 
 		LUNROLL(n, 0, ORDER-1, `LUNROLL(m, 0, n, `
-		Ore[`'n`']['`m'`] = srcexps[eval( ((n-1) * (n+2) + 2 + m)*8 ) + i];
-		Oim[`'n`']['`m'`] = srcexps[eval( ((n-1) * (n+2) + 3 + n + m)*8 ) + i];')')
+		Ore[n][m] = srcexps[eval( ((n-1) * (n+2) + 2 + m)*8 ) + i];
+		Oim[n][m] = srcexps[eval( ((n-1) * (n+2) + 3 + n + m)*8 ) + i];')')
 
 		// Set up the arguments of the harmonic functions
 		const double x = xrels[i];
@@ -67,7 +67,7 @@ export void e2l(
 		rhos[0] = 1.0;
 		rhos[1] = rho_1;
 
-		LUNROLL(n, 2, 2*ORDER-1, `rhos[`'n`'] = rhos[decr(n)] * rho_1;
+		LUNROLL(n, 2, 2*ORDER-1, `rhos[n] = (rhos[decr(n)] + __DBL_EPSILON__*10) * rho_1;
 		')
 
 		{
@@ -84,8 +84,8 @@ export void e2l(
 			// Precompute the harmonics
 			LUNROLL(n, 0, 2*ORDER-2, `LUNROLL(m, 0, n, `
 			const double absY_`'n`'_`'m`' = Y_`'n`'_`'m`'(sintheta, costheta);
-			Yre[`'n`'][`'m`'] = absY_`'n`'_`'m`' * cosphi_`'m;
-			Yim[`'n`'][`'m`'] = absY_`'n`'_`'m`' * sinphi_`'m;
+			Yre[n][m] = absY_`'n`'_`'m`' * cosphi_`'m;
+			Yim[n][m] = absY_`'n`'_`'m`' * sinphi_`'m;
 			')')
 		}
 
@@ -106,7 +106,7 @@ export void e2l(
 							A[j][k] * A[n][m4abs(m)] / A[j+n][abs(m-k)] * rhos[j+n+1];
 
 					const double reO = Ore[n][m4abs(m)];
-					const double imO = ifelse( eval( m < 0 ), 1, `-', `') Oim[n][m4abs(m)];
+					const double imO = ifelse( eval( m < 0 ), 1, `', `-') Oim[n][m4abs(m)];
 
 					const double reY = Yre[j+n][abs(m-k)];
 					const double imY = ((m-k) < 0) ? -Yim[j+n][-(m-k)] : Yim[j+n][(m-k)];
@@ -120,7 +120,7 @@ export void e2l(
 	}
 
 	LUNROLL(n, 0, ORDER-1, `LUNROLL(m, 0, n, `
-	dstexp[eval( (n-1) * (n+2) + 2 + m )]     += reduce_add(Lre[`'n`'][`'m`']);
-	dstexp[eval( (n-1) * (n+2) + 3 + n + m )] += reduce_add(Lim[`'n`'][`'m`']);
+	dstexp[eval( (n-1) * (n+2) + 2 + m )] += reduce_add(Lre[n][m]);
+	dstexp[eval( (n-1) * (n+2) + 3 + n + m )] += reduce_add(Lim[n][m]);
 	')')
 }

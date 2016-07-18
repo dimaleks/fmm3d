@@ -28,15 +28,15 @@ export void l2l(
 	double Lim[ORDER][ORDER];
 
 	LUNROLL(n, 0, ORDER-1, `LUNROLL(m, 0, n, `
-	Lre[`'n`']['`m'`] = 0;
-	Lim[`'n`']['`m'`] = 0;')')
+	Lre[n][m] = 0;
+	Lim[n][m] = 0;')')
 
 	uniform double Ore[ORDER][ORDER];
 	uniform double Oim[ORDER][ORDER];
 
 	LUNROLL(n, 0, ORDER-1, `LUNROLL(m, 0, n, `
-	Ore[`'n`']['`m'`] = srcexp[eval( (n-1) * (n+2) + 2 + m )];
-	Oim[`'n`']['`m'`] = srcexp[eval( (n-1) * (n+2) + 3 + n + m )];')')
+	Ore[n][m] = srcexp[eval( (n-1) * (n+2) + 2 + m )];
+	Oim[n][m] = srcexp[eval( (n-1) * (n+2) + 3 + n + m )];')')
 
 	foreach(i=0...8)
 	{
@@ -54,7 +54,7 @@ export void l2l(
 		const double rho_1 = 1.0d / rho;
 
 		const double costheta = z * rho_1;
-		const double sintheta = sqrt(1.0d - costheta*costheta);
+		const double sintheta = sqrt(abs(1.0d - costheta*costheta));
 
 		const double phiMag_1 = rsqrt(xxyy + __DBL_EPSILON__*10);
 		double mag_1 = 1.0d;
@@ -67,7 +67,7 @@ export void l2l(
 		rhos[0] = 1.0;
 		rhos[1] = rho;
 		rhos[2] = rho2;
-		LUNROLL(n, 3, ORDER-1, `rhos[`'n`'] = rhos[decr(n)] * rho;
+		LUNROLL(n, 3, ORDER-1, `rhos[n] = rhos[decr(n)] * rho;
 		')
 
 		{
@@ -84,8 +84,8 @@ export void l2l(
 			// Precompute the harmonics
 			LUNROLL(n, 0, ORDER-1, `LUNROLL(m, 0, n, `
 			const double absY_`'n`'_`'m`' = Y_`'n`'_`'m`'(sintheta, costheta);
-			Yre[`'n`'][`'m`'] = absY_`'n`'_`'m`' * cosphi_`'m;
-			Yim[`'n`'][`'m`'] = absY_`'n`'_`'m`' * sinphi_`'m;
+			Yre[n][m] = absY_`'n`'_`'m`' * cosphi_`'m;
+			Yim[n][m] = absY_`'n`'_`'m`' * sinphi_`'m;
 			')')
 		}
 
@@ -103,7 +103,7 @@ export void l2l(
 				{
 					const double f =
 							( (abs(m) - abs((m)-k) - abs(k)) % 4 == 0 ? 1.0d : -1.0d ) * ( (n+j) % 2 == 0 ? 1.0d : -1.0d ) *
-							A[n-j][abs(m-k)] * A[j][k] / A[n][abs(m)] * rhos[n-j];
+							A[n-j][abs(m-k)] * A[j][k] / A[n][m4abs(m)] * rhos[n-j];
 
 					const double reO = Ore[n][m4abs(m)];
 					const double imO = ifelse( eval(m < 0), 1, `-', `' ) Oim[n][m4abs(m)];
@@ -118,9 +118,9 @@ export void l2l(
 			}
 		}
 
-	LUNROLL(n, 0, ORDER-1, `LUNROLL(m, 0, n, `
-	dstexps[eval( ((n-1) * (n+2) + 2 + m)*8 ) + i]     += Lre[`'n`'][`'m`'];
-	dstexps[eval( ((n-1) * (n+2) + 3 + n + m)*8 ) + i] += Lim[`'n`'][`'m`'];
-	')')
+		LUNROLL(n, 0, ORDER-1, `LUNROLL(m, 0, n, `
+		dstexps[eval( ((n-1) * (n+2) + 2 + m)*8 ) + i]     += Lre[n][m];
+		dstexps[eval( ((n-1) * (n+2) + 3 + n + m)*8 ) + i] += Lim[n][m];
+		')')
 	}
 }
