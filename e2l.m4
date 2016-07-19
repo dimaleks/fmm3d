@@ -94,16 +94,34 @@ export void e2l(
 		// First double loop with k and j
 		// Second, with n and m, unrolled
 
-		for (uniform int j=0; j<ORDER; j++)
+		ifdef(`E2L_SLOOOW_COMPILE', `
+
+		LUNROLL(j, 0, ORDER-1, `LUNROLL(k, 0, j, `LUNROLL(n, 0, ORDER-1, `LUNROLL(m, -n, n, `ifelse(eval(m4abs(eval(m-k)) <= m4abs(eval(j+n))), 1, `
+		{
+			const double f =
+			eval( ifelse( eval(m4abs( eval( (m4abs(eval(k-(m))) - m4abs(k) - m4abs(m)) % 4 ) )), 0, 1, -1) * ifelse( eval(n % 2), 0, 1, -1) ) *
+			A[j][k] * A[n][m4abs(m)] / A[j+n][m4abs(eval(m-k))]  * rhos[`'eval(j+n+1)`'];
+
+			const double reO = Ore[n][m4abs(m)];
+			const double imO = ifelse( eval( m < 0 ), 1, `', `-') Oim[n][m4abs(m)];
+
+			const double reY = Yre[eval(j+n)][m4abs(eval(m-k))];
+			const double imY = ifelse( eval( (m-k) < 0 ), 1, `-', `') Yim[eval(j+n)][m4abs(eval(m-k))];
+
+			Lre[j][k] += f * (reY*reO - imY*imO);
+			Lim[j][k] += f * (reY*imO + imY*reO);
+		}
+		')')')')')',
+
+		`for (uniform int j=0; j<ORDER; j++)
 		{
 			for (uniform int k=0; k<=j; k++)
 			{
 				LUNROLL(n, 0, ORDER-1, `LUNROLL(m, -n, n, `
 				if (abs(m-k) <= abs(j+n))
 				{
-					const double f =
-							( (abs(k-(m)) - abs(k) - abs(m)) % 4 == 0 ? 1.0d : -1.0d ) * ifelse( eval(n % 2), 0, 1.0d, -1.0d ) *
-							A[j][k] * A[n][m4abs(m)] / A[j+n][abs(m-k)] * rhos[j+n+1];
+					const double f = ifelse( eval(n % 2), 0, `', `-' ) ( (abs(k-(m)) - k - m4abs(m)) % 4 == 0 ? 1.0d : -1.0d ) *
+							A[n][m4abs(m)] / A[j+n][abs(m-k)] * rhos[j+n+1];
 
 					const double reO = Ore[n][m4abs(m)];
 					const double imO = ifelse( eval( m < 0 ), 1, `', `-') Oim[n][m4abs(m)];
@@ -115,8 +133,11 @@ export void e2l(
 					Lim[j][k] += f * (reY*imO + imY*reO);
 				}
 				')')
+
+				Lre[j][k] *= A[j][k];
+				Lim[j][k] *= A[j][k];
 			}
-		}
+		}')
 	}
 
 	LUNROLL(n, 0, ORDER-1, `LUNROLL(m, 0, n, `
@@ -124,3 +145,4 @@ export void e2l(
 	dstexp[eval( (n-1) * (n+2) + 3 + n + m )] += reduce_add(Lim[n][m]);
 	')')
 }
+

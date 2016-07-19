@@ -31,8 +31,8 @@ void check(const double * ref, const double * res, const int N)
 		const double maxval = std::max(fabs(res[i]), fabs(ref[i]));
 		const double relerr = err/std::max(1e-3, maxval);
 
-		if (fabs(relerr) >= tol && fabs(err) >= tol)
-			printf("%3d: %16.8e vs %16.8e     err:    %16.8e %16.8e\n", i, res[i], ref[i], err, relerr);
+//		if (fabs(relerr) >= tol && fabs(err) >= tol)
+//			printf("%3d: %16.8e vs %16.8e     err:    %16.8e %16.8e\n", i, res[i], ref[i], err, relerr);
 
 		l1 += fabs(err);
 		l1_rel += fabs(relerr);
@@ -51,7 +51,7 @@ void check(const double * ref, const double * res, const int N)
 
 void test(double theta, double tol, bool verify = true)
 {
-	const int nsrc = 140;
+	const int nsrc = 24000;
 	double *xsrc, *ysrc, *zsrc, *qsrc;
 
 	posix_memalign((void **)&xsrc, 32, sizeof(double) * nsrc);
@@ -80,21 +80,23 @@ void test(double theta, double tol, bool verify = true)
 	ysrc[1] = -0.5;
 	zsrc[1] = -0.5;
 
-	for (int i=0; i<nsrc; i++)
-		printf("%e %e %e  %e\n", xsrc[i], ysrc[i], zsrc[i], qsrc[i]);
-
-	int ndst = 10;
-	double *xdst, *ydst, *zdst, *potentials;
-	double *xfrc, *yfrc, *zfrc;
+	int ndst = 24000;
+	double *xdst, *ydst, *zdst;
+	double *xfrc,  *yfrc,  *zfrc,  *potentials;
+	double *xfrcL, *yfrcL, *zfrcL, *potentialsL;
 	posix_memalign((void **)&xdst, 32, sizeof(double) * ndst);
 	posix_memalign((void **)&ydst, 32, sizeof(double) * ndst);
 	posix_memalign((void **)&zdst, 32, sizeof(double) * ndst);
 
-	posix_memalign((void **)&xfrc, 32, sizeof(double) * ndst);
-	posix_memalign((void **)&yfrc, 32, sizeof(double) * ndst);
-	posix_memalign((void **)&zfrc, 32, sizeof(double) * ndst);
+	posix_memalign((void **)&xfrc,  32, sizeof(double) * ndst);
+	posix_memalign((void **)&yfrc,  32, sizeof(double) * ndst);
+	posix_memalign((void **)&zfrc,  32, sizeof(double) * ndst);
+	posix_memalign((void **)&xfrcL, 32, sizeof(double) * ndst);
+	posix_memalign((void **)&yfrcL, 32, sizeof(double) * ndst);
+	posix_memalign((void **)&zfrcL, 32, sizeof(double) * ndst);
 
-	posix_memalign((void **)&potentials, 32, sizeof(double) * ndst);
+	posix_memalign((void **)&potentials,  32, sizeof(double) * ndst);
+	posix_memalign((void **)&potentialsL, 32, sizeof(double) * ndst);
 
 	for (int i=0; i<ndst; i++)
 	{
@@ -108,13 +110,16 @@ void test(double theta, double tol, bool verify = true)
 
 	printf("Testing %s with %d sources and %d targets (theta %.3e)...\n", "POTENTIAL", nsrc, ndst, theta);
 
-	FMM3D fmm(0.5, 1);
+	FMM3D fmm(0.5, 100);
 	const int iters = 1;
 	for (int n=0; n<iters; n++)
 	{
 		fmm.buildTree(nsrc, xsrc, ysrc, zsrc, qsrc);
 		fmm.potential(ndst, xdst, ydst, zdst, potentials);
-		fmm.force    (ndst, xdst, ydst, zdst, xfrc, yfrc, zfrc);
+		fmm.potentialLog(ndst, xdst, ydst, zdst, potentialsL);
+		
+		fmm.force(ndst, xdst, ydst, zdst, xfrc, yfrc, zfrc);
+		fmm.forceLog(ndst, xdst, ydst, zdst, xfrcL, yfrcL, zfrcL);
 	}
 
 	double usppot = fmm.profiler.elapsed("Potential", Profiler::Unit::us) / ndst;
@@ -134,7 +139,7 @@ void test(double theta, double tol, bool verify = true)
 		posix_memalign((void **)&zref, 32, sizeof(double) * ndst);
 
 		const int OFFSET = 0;
-		const int JUMP = 1;
+		const int JUMP = 133;
 
 #pragma omp parallel for
 		for(int i = OFFSET; i < ndst; i += JUMP)
@@ -167,27 +172,36 @@ void test(double theta, double tol, bool verify = true)
 			zref[i] = sz;
 		}
 
-		std::vector<double> p, pr, x, xr, y, yr, z, zr;
+		std::vector<double> p, pl, pr, x, xl, xr, y, yl, yr, z, zl, zr;
 
 		for(int i = OFFSET; i < ndst; i += JUMP)
 		{
 			pr.push_back(pref[i]);
 			p .push_back(potentials[i]);
+			pl.push_back(potentialsL[i]);
 
 			xr.push_back(xref[i]);
 			x .push_back(xfrc[i]);
+			xl.push_back(xfrcL[i]);
 
 			yr.push_back(yref[i]);
 			y .push_back(yfrc[i]);
+			yl.push_back(yfrcL[i]);
 
 			zr.push_back(zref[i]);
 			z .push_back(zfrc[i]);
+			zl.push_back(zfrcL[i]);
 		}
 
 		check(&pr[0], &p[0], p.size());
-//		check(&xr[0], &x[0], p.size());
-//		check(&yr[0], &y[0], p.size());
-//		check(&zr[0], &z[0], p.size());
+		check(&xr[0], &x[0], p.size());
+		check(&yr[0], &y[0], p.size());
+		check(&zr[0], &z[0], p.size());
+		
+		check(&pr[0], &pl[0], p.size());
+		check(&xr[0], &xl[0], p.size());
+		check(&yr[0], &yl[0], p.size());
+		check(&zr[0], &zl[0], p.size());
 
 		free(pref);
 		free(xref);

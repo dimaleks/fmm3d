@@ -17,11 +17,11 @@ export void e2p(
 
 	const uniform int niceNexps = ((nexps + 7) / 8) * 8;
 
-	foreach(k=0...niceNexps)
+	foreach(i=0...niceNexps)
 	{
-		const double x = xrel[k];
-		const double y = yrel[k];
-		const double z = zrel[k];
+		const double x = xrel[i];
+		const double y = yrel[i];
+		const double z = zrel[i];
 
 		// compute 1/rho
 		const double xxyy  = x*x + y*y;
@@ -67,8 +67,8 @@ export void e2p(
 
 		LUNROLL(n, 0, ORDER-1, `LUNROLL(m, 0, n, `
 		{
-			const double reM = exps[eval((n-1) * (n+2) + 2 + m)*nexps + k];
-			const double imM = exps[eval((n-1) * (n+2) + 3 + n + m)*nexps + k];
+			const double reM = exps[eval((n-1) * (n+2) + 2 + m)*nexps + i];
+			const double imM = exps[eval((n-1) * (n+2) + 3 + n + m)*nexps + i];
 
 			s += ifelse(m, 0, 0.5d*) factor * (reM * reY_`'n`'_`'m`' + imM * imY_`'n`'_`'m`');
 		}
@@ -96,13 +96,13 @@ export void e2pForce(
 
 	const uniform int niceNexps = ((nexps + 7) / 8) * 8;
 
-	foreach(k=0...niceNexps)
+	foreach(i=0...niceNexps)
 	{
 		double myfx = 0, myfy = 0, myfz = 0;
 
-		const double x = xrel[k];
-		const double y = yrel[k];
-		const double z = zrel[k];
+		const double x = xrel[i];
+		const double y = yrel[i];
+		const double z = zrel[i];
 
 		// compute 1/rho
 		const double xxyy  = x*x + y*y;
@@ -154,8 +154,8 @@ export void e2pForce(
 			const double reYn_1 = reY_`'incr(n)`'_`'m`';
 			const double imYn_1 = imY_`'incr(n)`'_`'m`';
 
-			const double reM = factor * exps[eval((n-1) * (n+2) + 2 + m)*nexps + k];
-			const double imM = factor * exps[eval((n-1) * (n+2) + 3 + n + m)*nexps + k];
+			const double reM = factor * exps[eval((n-1) * (n+2) + 2 + m)*nexps + i];
+			const double imM = factor * exps[eval((n-1) * (n+2) + 3 + n + m)*nexps + i];
 
 			const double reYnX = reYn * x*eval(n+1) - imYn * m*y;
 			const double imYnX = reYn * m*y + imYn * x*eval(n+1);

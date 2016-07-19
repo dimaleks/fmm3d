@@ -18,12 +18,12 @@ export void p2e(
 	LUNROLL(n, 0, ORDER-1, `double substr(echo(LUNROLL(m, 0, n, `, Mim_`'n`'_`'m = 0');), `1')'
 	)
 
-	foreach (k=0 ... nsrc)
+	foreach (i=0 ... nsrc)
 	{
-		const double x = xsrc[k] - xcom;
-		const double y = ysrc[k] - ycom;
-		const double z = zsrc[k] - zcom;
-		const double q = qsrc[k];
+		const double x = xsrc[i] - xcom;
+		const double y = ysrc[i] - ycom;
+		const double z = zsrc[i] - zcom;
+		const double q = qsrc[i];
 
 		// compute 1/rho = rho_1 and rho = rho^2 * rho^-1
 		const double xxyy  = x*x + y*y;

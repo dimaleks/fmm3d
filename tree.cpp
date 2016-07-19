@@ -33,7 +33,7 @@ namespace Tree
 		const int e = node->part_end;
 		const int l = node->level;
 		const long long mId = node->morton_id;
-		const bool leaf = node->level >= 2;//e - s <= leafCapacity || l + 1 > LMAX;
+		const bool leaf = e - s <= leafCapacity || l + 1 > LMAX;
 		
 		
 		if (leaf)
@@ -96,7 +96,7 @@ namespace Tree
 			node_setup(xsorted.ptr() + s, ysorted.ptr() + s, zsorted.ptr() + s, qsorted.ptr() + s, e - s,
 					   node->Q, node->xcom, node->ycom, node->zcom, node->r, node->w);
 			
-			// TODO: remove this
+			// TODO: remove this?
 			if (e-s == 0)
 			{
 				int xid, yid, zid;
@@ -119,46 +119,8 @@ namespace Tree
 				ptrExps[c] = expansions.ptr() + chId*EXPSIZE;
 			}
 			
-			//			ispc::p2e(xsorted + s, ysorted + s, zsorted + s, qsorted + s, e - s,
-			//					node->xcom, node->ycom, node->zcom, expansions + nodeid*EXPSIZE);
-			
 			transpose8xM(ptrExps, expsBuffer, EXPSIZE);
 			ispc::e2e(xrels, yrels, zrels, expsBuffer, expansions.ptr() + nodeid*EXPSIZE);
-			
-			for(int c = 0; c < nchildren; ++c)
-			{
-				const int chId = childbase + c;
-				Node *child = nodes.ptr()+chId;
-				
-				{
-					xrels[c] = 1*ext / (1 << child->level);
-					yrels[c] = 1*ext / (1 << child->level);
-					zrels[c] = 1*ext / (1 << child->level);
-				}
-			}
-			
-//			if (nValid >= 1)
-//			{
-//				for(int c = 0; c < nchildren; ++c)
-//				{
-//					printf("%f %f %f (%d  %f)\n", nodes[childbase+c].xcom, nodes[childbase+c].ycom, nodes[childbase+c].zcom, nodes[childbase+c].level, xrels[c]);
-//				}
-//				for (int i=0; i<EXPSIZE*8; i++)
-//				{
-//					printf("%e  ", expsBuffer[i]);
-//					if (i%8 == 7) printf("\n");
-//				}
-//				printf("\n\n");
-//				
-//				for (int i=0; i<EXPSIZE*8; i++)
-//				{
-//					printf("%e  ", locExpsBuffer[i]);
-//					if (i%8 == 7) printf("\n");
-//				}
-//				printf("\n\n");
-//				
-//				//exit(0);
-//			}
 		}
 	}
 	
@@ -181,11 +143,10 @@ namespace Tree
 			auto child = nodes.ptr() + chId;
 			
 			xrels[c] = -child->xcom + parent->xcom;
-			yrels[c] = -child->xcom + parent->ycom;
-			zrels[c] = -child->xcom + parent->zcom;
+			yrels[c] = -child->ycom + parent->ycom;
+			zrels[c] = -child->zcom + parent->zcom;
 				
 			ptrExps[c] = locExps.ptr() + chId*EXPSIZE;
-			//printf("%f %f %f   %f\n", xrels[c], yrels[c], zrels[c], child->r);
 		}
 		
 		ispc::l2l(xrels, yrels, zrels, locExps.ptr() + nodeid*EXPSIZE, expsBuffer);
@@ -195,27 +156,31 @@ namespace Tree
 		// find the nodes that belong to parent's neigh list
 		// but DO NOT belong to own neigh list
 		// Add local expansions of those nodes
-		std::set<int> parentNeighs;
+		std::vector<int> parentNeighs;
+		parentNeighs.reserve(nNeighs*8);
 		
 		for (int nId : neighbors[nodeid])
 		{
 			if (nodes[nId].level >= parent->level && nodes[nId].child_id != 0)
 				for(int c = 0; c < nchildren; ++c)
-					parentNeighs.insert(nodes[nId].child_id + c);
+					parentNeighs.push_back(nodes[nId].child_id + c);
 			else
-				parentNeighs.insert(nId);
+				parentNeighs.push_back(nId);
 		}
+		std::sort(parentNeighs.begin(), parentNeighs.end());
 		
+		std::vector<int> diff;
+		diff.reserve(nNeighs*8);
 		for(int c = 0; c < nchildren; ++c)
 		{
 			const int chId = parent->child_id + c;
 			auto child = nodes.ptr() + chId;
 			auto& myNeighs = neighbors[chId];
 			
-			std::set<int> diff;
+			diff.clear();
 			std::set_difference(parentNeighs.begin(), parentNeighs.end(),
 								myNeighs.begin(), myNeighs.end(), std::inserter(diff, diff.end()));
-			
+
 			int count = 0;
 			for (auto id : diff)
 			{
@@ -226,6 +191,7 @@ namespace Tree
 				
 				if (count % nchildren == 7)
 				{
+					// Change division to mult in the kernel
 					transpose8xM((const double**)ptrExps, expsBuffer, EXPSIZE);
 					ispc::e2l(xrels, yrels, zrels, (const double*)expsBuffer, locExps.ptr() + chId*EXPSIZE);
 					count = -1; // Will be increased immediately later
@@ -388,7 +354,7 @@ namespace Tree
 					 Profiler& profiler)
 	{
 
-		maxNodes = (nsrc + leafCapacity - 1) / leafCapacity * 200;
+		maxNodes = (nsrc + leafCapacity - 1) / leafCapacity * 2000;
 		
 		mortonIndex.resize(nsrc);
 		order.resize(nsrc);
