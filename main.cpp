@@ -51,7 +51,7 @@ void check(const double * ref, const double * res, const int N)
 
 void test(double theta, double tol, bool verify = true)
 {
-	const int nsrc = 24000;
+	const int nsrc = 3000;
 	double *xsrc, *ysrc, *zsrc, *qsrc;
 
 	posix_memalign((void **)&xsrc, 32, sizeof(double) * nsrc);
@@ -80,7 +80,7 @@ void test(double theta, double tol, bool verify = true)
 	ysrc[1] = -0.5;
 	zsrc[1] = -0.5;
 
-	int ndst = 24000;
+	int ndst = 3000;
 	double *xdst, *ydst, *zdst;
 	double *xfrc,  *yfrc,  *zfrc,  *potentials;
 	double *xfrcL, *yfrcL, *zfrcL, *potentialsL;
@@ -111,7 +111,7 @@ void test(double theta, double tol, bool verify = true)
 	printf("Testing %s with %d sources and %d targets (theta %.3e)...\n", "POTENTIAL", nsrc, ndst, theta);
 
 	FMM3D fmm(0.5, 100);
-	const int iters = 1;
+	const int iters = 2;
 	for (int n=0; n<iters; n++)
 	{
 		fmm.buildTree(nsrc, xsrc, ysrc, zsrc, qsrc);
@@ -139,7 +139,7 @@ void test(double theta, double tol, bool verify = true)
 		posix_memalign((void **)&zref, 32, sizeof(double) * ndst);
 
 		const int OFFSET = 0;
-		const int JUMP = 133;
+		const int JUMP = 433;
 
 #pragma omp parallel for
 		for(int i = OFFSET; i < ndst; i += JUMP)

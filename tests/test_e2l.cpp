@@ -66,9 +66,9 @@ int main()
 	for (int i=0; i<EXPSIZE; i++)
 		srcexps[i*8] = srcexp[i];
 	
-	double xr alignas(32) [8] = {0.9, 1, 1, 1, 1, 1, 1, 1};
-	double yr alignas(32) [8] = {1.1, 1, 1, 1, 1, 1, 1, 1};
-	double zr alignas(32) [8] = {0.9, 1, 1, 1, 1, 1, 1, 1};
+	double xr alignas(32) [8] = {1.0, 1, 1, 1, 1, 1, 1, 1};
+	double yr alignas(32) [8] = {1.0, 1, 1, 1, 1, 1, 1, 1};
+	double zr alignas(32) [8] = {1.0, 1, 1, 1, 1, 1, 1, 1};
 	
 	Profiler prof;
 	
@@ -106,16 +106,18 @@ int main()
 	//		movedexp[i] = dstexps[8*i];
 	//	}
 	//
-	//	std::vector<const double*> ptrExps;
-	//	ptrExps.push_back(movedexp);
-	//
-	//	double xt alignas(32) [] = {0.0};
-	//	double yt alignas(32) [] = {0.0};
-	//	double zt alignas(32) [] = {0.0};
-	//	double pot alignas(32) [] = {0};
-	//
-	//	ispc::l2p(xt, yt, zt, &ptrExps[0], 1, pot);
-	//	printf("Pot: %f\n", pot[0]);
+	std::vector<const double*> ptrExps;
+	ptrExps.push_back(e2lexp);
+
+	double xt alignas(32) [] = {-0.1};
+	double yt alignas(32) [] = {-0.2};
+	double zt alignas(32) [] = {0.1};
+	double fx alignas(32) [] = {0};
+	double fy alignas(32) [] = {0};
+	double fz alignas(32) [] = {0};
+	
+	ispc::l2pForce(xt, yt, zt, &ptrExps[0], 1, fx, fy, fz);
+	printf("Frc: %f %f %f\n", fx[0], fy[0], fz[0]);
 	//
 	
 	

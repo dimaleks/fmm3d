@@ -56,7 +56,7 @@ namespace Tree
 		else
 		{
 			int childbase;
-			//#pragma omp atomic capture
+#pragma omp atomic capture
 			{
 				childbase = curNNodes; curNNodes += nchildren;
 			}
@@ -79,7 +79,7 @@ namespace Tree
 				
 				nodes[chId].setup(indexmin, indexsup, l + 1, key1);
 				
-				//#pragma omp task firstprivate(chId) if (indexsup - indexmin > 5e4 && c != nchildren-1)
+#pragma omp task firstprivate(chId) if (indexsup - indexmin > 5e4 && c != nchildren-1)
 				{
 					buildRecursive(chId);
 				}
@@ -91,7 +91,7 @@ namespace Tree
 			const double *ptrExps[nchildren];
 			double expsBuffer alignas(32) [nchildren*EXPSIZE];
 			
-			//#pragma omp taskwait
+#pragma omp taskwait
 			
 			node_setup(xsorted.ptr() + s, ysorted.ptr() + s, zsorted.ptr() + s, qsorted.ptr() + s, e - s,
 					   node->Q, node->xcom, node->ycom, node->zcom, node->r, node->w);
@@ -223,7 +223,7 @@ namespace Tree
 		for(int c = 0; c < nchildren; ++c)
 		{
 			const int chId = parent->child_id + c;
-			//#pragma omp task firstprivate(chId) if (parent->level <= 3 && c != nchildren-1)
+#pragma omp task firstprivate(chId) if (parent->level <= 3 && c != nchildren-1)
 			{
 				computeLocalExpsRecursive(chId);
 			}
@@ -258,6 +258,7 @@ namespace Tree
 			return false;
 		});
 		
+#pragma omp parallel for
 		for (int nodeid=0; nodeid<curNNodes; nodeid++)
 		{
 			auto node = nodes.ptr() + nodeid;
@@ -388,14 +389,13 @@ namespace Tree
 		});
 		
 		profiler.profile("Tree : building", [&]() {
-			//#pragma omp parallel
-			//#pragma omp single nowait
+#pragma omp parallel
+#pragma omp single nowait
 			{
 				curNNodes = 1;
 				std::fill(expansions.ptr(), expansions.ptr() + maxNodes*EXPSIZE, 0);
 				nodes[0].setup(0, nsrc, 0, 0);
 				buildRecursive(0);
-				printf("NODES: %d\n", curNNodes);
 			}
 		});
 		
@@ -404,8 +404,8 @@ namespace Tree
 		});
 		
 		profiler.profile("Tree : local exps", [&]() {
-			//#pragma omp parallel
-			//#pragma omp single nowait
+#pragma omp parallel
+#pragma omp single nowait
 			{
 				computeLocalExpsRecursive(0);
 			}

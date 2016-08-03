@@ -198,7 +198,7 @@ void FMM3D::forceLog(const int ndst,
 				  double* __restrict const zfrc)
 {
 	
-	profiler.profile("Force", [&]() {
+	profiler.profile("Force (LOG)", [&]() {
 #pragma omp parallel for schedule(dynamic,4)
 		for(int i = 0; i < ndst; ++i)
 			evaluateLog(xdst[i], ydst[i], zdst[i], xfrc[i], yfrc[i], zfrc[i]);

@@ -20,7 +20,7 @@ export void p2p(
 		const double zr = zdst - zsrc[i];
 
 		const double r2 = xr*xr + yr*yr + zr*zr;
-		const double r_2 = rsqrt(r2+EPS);
+		const double r_2 = rsqrt(r2);
 		s += (abs(r2) > EPS) ? qsrc[i] * r_2 : 0;
 	}
 

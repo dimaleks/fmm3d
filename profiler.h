@@ -13,6 +13,7 @@
 #include <sstream>
 #include <iomanip>
 #include <unordered_map>
+#include <algorithm>
 
 #include "timer.h"
 
@@ -23,7 +24,7 @@ struct Timings
     long long total;
     Timer timer;
     
-    Timings() : started(false), iterations(0), total(0) {};
+    Timings() : started(false), iterations(0), total(0), timer() {};
 };
 
 class Profiler
@@ -144,7 +145,11 @@ public:
     	out << "Total time: " << std::fixed << std::setprecision(1) << total*factor << " " << suffix << std::endl;
     	out << std::left << "[" << std::setw(longest) << "Kernel" << "]    " << std::setw(20)
     			<< "Time, "+suffix << std::setw(20) << "Executions" << std::setw(20) << "Percentage" << std::endl;
-    	for (auto &tm : timings)
+		
+		std::vector<std::pair<std::string, Timings>> v(timings.begin(), timings.end());
+		std::sort(v.begin(), v.end(), [] (auto& a, auto& b) { return a.second.total > b.second.total; });
+		
+		for (auto &tm : v)
     	{
     		out << "[" << std::setw(longest) << tm.first << "]    "
     				<< std::fixed << std::setprecision(3) << std::setw(20) << tm.second.total * factor / tm.second.iterations

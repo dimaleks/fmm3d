@@ -16,9 +16,9 @@ class Timer
 private:
     std::chrono::time_point<std::chrono::high_resolution_clock> _start, _end;
     
-    const std::chrono::time_point<std::chrono::high_resolution_clock> none =
-          std::chrono::time_point<std::chrono::high_resolution_clock>::min();
-    
+	std::chrono::time_point<std::chrono::high_resolution_clock> none =
+	std::chrono::time_point<std::chrono::high_resolution_clock>::min();
+	
 public:
     
     inline Timer()
