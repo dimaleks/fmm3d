@@ -6,6 +6,7 @@ divert(0)dnl
 
 #include "harmonics.h"
 #include "a.h"
+#include "b.h"
 
 inline int abs(int v)
 {
@@ -102,7 +103,7 @@ export void e2e(
 				if (abs(m-k) <= j-n && n <= j)
 				{
 					const double f = ( (abs(k) - abs(m) - abs(k-(m))) % 4 == 0 ? 1 : -1 ) *
-									A[j-n][abs(k-(m))] * A[n][m4abs(m)] / A[j][k] * rhos[n];
+									A[j-n][abs(k-(m))] * A[n][m4abs(m)] * B[j][k] * rhos[n];
 
 					const double reO = Ore[j-n][abs(k-(m))];
 					const double imO = (k-(m) > 0) ? Oim[j-n][abs(k-(m))] : -Oim[j-n][abs(k-(m))];

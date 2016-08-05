@@ -52,6 +52,11 @@ namespace Tree
 			}
 		}
 		
+		inline void fill(const T val)
+		{
+			std::fill(data, data+_size, val);
+		}
+		
 		inline T& operator[] (int i) {return data[i];}
 		inline T* ptr()   {return data;}
 		inline int size() {return _size;}

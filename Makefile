@@ -1,4 +1,5 @@
-order ?= 12
+order ?= 10
+fast-e2l ?= 0
 ORDERFLAG = -DORDER=$(order)
 
 CXXFLAGS +=-g -fopenmp -fno-strict-aliasing -march=native -mtune=native -O3 -std=c++14 -m64
@@ -21,6 +22,10 @@ ifneq (,$(findstring clang,$(CXX)))
 	OMPPATH=/usr/local/Cellar/libiomp/20150701
 	CXXFLAGS+=-I$(OMPPATH)/include/libiomp/
 	LINKFLAGS+=-L$(OMPPATH)/lib/ -Wl,-rpath,$(OMPPATH)/lib/
+endif
+
+ifneq ($(fast-e2l), 0)
+	E2LFLAG = -DE2L_SLOOOW_COMPILE
 endif
 
 CXXFLAGS += -MP -MD
@@ -54,10 +59,7 @@ fmm: $(ISPC_OBJ_FILES) $(CPP_OBJ_FILES)
 	@rm -f $(patsubst %.ispc,%.dtmp,$<)
 
 %.ispc: %.m4 ORDER
-	m4 $(ORDERFLAG) $< > $@
-	
-%.cpp: %.m4 ORDER
-	m4 $(ORDERFLAG) $< > $@
+	m4 $(ORDERFLAG) $(E2LFLAG) $< > $@
 
 clean:
 	rm -f *.o *.d $(ISPC_FROM_M4_FILES) *.ispco fmm

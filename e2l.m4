@@ -6,6 +6,7 @@ divert(0)dnl
 
 #include "harmonics.h"
 #include "a.h"
+#include "b.h"
 
 inline int abs(int v)
 {
@@ -100,7 +101,7 @@ export void e2l(
 		{
 			const double f =
 			eval( ifelse( eval(m4abs( eval( (m4abs(eval(k-(m))) - m4abs(k) - m4abs(m)) % 4 ) )), 0, 1, -1) * ifelse( eval(n % 2), 0, 1, -1) ) *
-			A[j][k] * A[n][m4abs(m)] / A[j+n][m4abs(eval(m-k))]  * rhos[`'eval(j+n+1)`'];
+			A[j][k] * A[n][m4abs(m)] * B[j+n][m4abs(eval(m-k))]  * rhos[`'eval(j+n+1)`'];
 
 			const double reO = Ore[n][m4abs(m)];
 			const double imO = ifelse( eval( m < 0 ), 1, `', `-') Oim[n][m4abs(m)];
@@ -121,7 +122,7 @@ export void e2l(
 				if (abs(m-k) <= abs(j+n))
 				{
 					const double f = ifelse( eval(n % 2), 0, `', `-' ) ( (abs(k-(m)) - k - m4abs(m)) % 4 == 0 ? 1.0d : -1.0d ) *
-							A[n][m4abs(m)] / A[j+n][abs(m-k)] * rhos[j+n+1];
+							A[n][m4abs(m)] * B[j+n][abs(m-k)] * rhos[j+n+1];
 
 					const double reO = Ore[n][m4abs(m)];
 					const double imO = ifelse( eval( m < 0 ), 1, `', `-') Oim[n][m4abs(m)];

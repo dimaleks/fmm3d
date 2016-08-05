@@ -79,19 +79,19 @@ namespace Tree
 				
 				nodes[chId].setup(indexmin, indexsup, l + 1, key1);
 				
-#pragma omp task firstprivate(chId) if (indexsup - indexmin > 5e4 && c != nchildren-1)
+#pragma omp task firstprivate(chId) if (l < 3 && c != nchildren-1)
 				{
 					buildRecursive(chId);
 				}
 			}
 			
+#pragma omp taskwait
+
 			double xrels  alignas(32) [nchildren];
 			double yrels  alignas(32) [nchildren];
 			double zrels  alignas(32) [nchildren];
 			const double *ptrExps[nchildren];
-			double expsBuffer alignas(32) [nchildren*EXPSIZE];
-			
-#pragma omp taskwait
+			alignedVector<double> expsBuffer(nchildren*EXPSIZE);
 			
 			node_setup(xsorted.ptr() + s, ysorted.ptr() + s, zsorted.ptr() + s, qsorted.ptr() + s, e - s,
 					   node->Q, node->xcom, node->ycom, node->zcom, node->r, node->w);
@@ -119,8 +119,8 @@ namespace Tree
 				ptrExps[c] = expansions.ptr() + chId*EXPSIZE;
 			}
 			
-			transpose8xM(ptrExps, expsBuffer, EXPSIZE);
-			ispc::e2e(xrels, yrels, zrels, expsBuffer, expansions.ptr() + nodeid*EXPSIZE);
+			transpose8xM(ptrExps, expsBuffer.ptr(), EXPSIZE);
+			ispc::e2e(xrels, yrels, zrels, expsBuffer.ptr(), expansions.ptr() + nodeid*EXPSIZE);
 		}
 	}
 	
@@ -132,7 +132,8 @@ namespace Tree
 		double yrels  alignas(32) [nchildren];
 		double zrels  alignas(32) [nchildren];
 		double *ptrExps[nchildren];
-		double expsBuffer alignas(32) [nchildren*EXPSIZE] = {0};
+		alignedVector<double> expsBuffer(nchildren*EXPSIZE);
+		expsBuffer.fill(0);
 		
 		if (parent->child_id == 0) return;
 		
@@ -149,8 +150,8 @@ namespace Tree
 			ptrExps[c] = locExps.ptr() + chId*EXPSIZE;
 		}
 		
-		ispc::l2l(xrels, yrels, zrels, locExps.ptr() + nodeid*EXPSIZE, expsBuffer);
-		transposeMx8((const double*)expsBuffer, ptrExps, EXPSIZE);
+		ispc::l2l(xrels, yrels, zrels, locExps.ptr() + nodeid*EXPSIZE, expsBuffer.ptr());
+		transposeMx8((const double*)expsBuffer.ptr(), ptrExps, EXPSIZE);
 		
 		// Now for every child:
 		// find the nodes that belong to parent's neigh list
@@ -192,8 +193,8 @@ namespace Tree
 				if (count % nchildren == 7)
 				{
 					// Change division to mult in the kernel
-					transpose8xM((const double**)ptrExps, expsBuffer, EXPSIZE);
-					ispc::e2l(xrels, yrels, zrels, (const double*)expsBuffer, locExps.ptr() + chId*EXPSIZE);
+					transpose8xM((const double**)ptrExps, expsBuffer.ptr(), EXPSIZE);
+					ispc::e2l(xrels, yrels, zrels, (const double*)expsBuffer.ptr(), locExps.ptr() + chId*EXPSIZE);
 					count = -1; // Will be increased immediately later
 				}
 				count++;
@@ -205,43 +206,30 @@ namespace Tree
 				for (int i=count; i<nchildren; i++)
 					ptrExps[i] = zeros;
 				
-				transpose8xM((const double**)ptrExps, expsBuffer, EXPSIZE);
-				ispc::e2l(xrels, yrels, zrels, (const double*)expsBuffer, locExps.ptr() + chId*EXPSIZE);
+				transpose8xM((const double**)ptrExps, expsBuffer.ptr(), EXPSIZE);
+				ispc::e2l(xrels, yrels, zrels, (const double*)expsBuffer.ptr(), locExps.ptr() + chId*EXPSIZE);
 			}
 			
-//			printf("Node %d:  (%f %f %f),  %d parts\n", chId, nodes[chId].xcom, nodes[chId].ycom, nodes[chId].zcom, nodes[chId].part_end - nodes[chId].part_start);
-//			for (int i=0; i<EXPSIZE; i++)
+//			if (true)
 //			{
-//				printf("%e  ", locExps[chId*EXPSIZE + i]);
+//				printf("Node %d:  (%f %f %f),  %d parts\n", chId, nodes[chId].xcom, nodes[chId].ycom, nodes[chId].zcom, nodes[chId].part_end - nodes[chId].part_start);
+//				for (int i=0; i<EXPSIZE; i++)
+//				{
+//					printf("%e  ", locExps[chId*EXPSIZE + i]);
+//				}
+//				printf("\n\n");
 //			}
-//			printf("\n\n");
-			
-			
 		}
 		
 		// Recurcively decend into children
 		for(int c = 0; c < nchildren; ++c)
 		{
 			const int chId = parent->child_id + c;
-#pragma omp task firstprivate(chId) if (parent->level <= 3 && c != nchildren-1)
+#pragma omp task firstprivate(chId) if (parent->level < 3 && c != nchildren-1)
 			{
 				computeLocalExpsRecursive(chId);
 			}
 		}
-	}
-	
-	const char *int_to_binary(long long x)
-	{
-		char *b = new char[65];
-		std::fill(b, b+64, '\0');
-		char *p = b;
-		
-		for (unsigned long long z = (1ll << 63); z > (1ll << 43); z >>= 1)
-		{
-			*(p++) = ((x & z) == z) ? '1' : '0';
-		}
-		
-		return b;
 	}
 	
 	void Tree::findNearestNeighs()
@@ -252,15 +240,18 @@ namespace Tree
 		for (int i=0; i<curNNodes; i++)
 			keys2nodes[i] = {nodes[i].morton_id, i};
 		
-		std::sort(keys2nodes.begin(), keys2nodes.end(), [&] (auto& a, auto& b) -> bool {
-			if (a.first < b.first) return true;
-			if (a.first == b.first) return nodes[a.second].level < nodes[b.second].level;
-			return false;
-		});
+		std::sort(keys2nodes.begin(), keys2nodes.end(),
+				  [&] (auto& a, auto& b) -> bool
+				  {
+					  if (a.first < b.first) return true;
+					  if (a.first == b.first) return nodes[a.second].level < nodes[b.second].level;
+					  return false;
+				  });
 		
 #pragma omp parallel for
 		for (int nodeid=0; nodeid<curNNodes; nodeid++)
 		{
+			neighbors[nodeid].clear();
 			auto node = nodes.ptr() + nodeid;
 			int xcode, ycode, zcode;
 			mortonDecode(node->morton_id, xcode, ycode, zcode);

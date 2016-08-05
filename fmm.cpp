@@ -2,6 +2,7 @@
 #include <cstring>
 #include <immintrin.h>
 #include <vector>
+#include <cmath>
 
 #include "fmm.h"
 #include "e2p.h"
