@@ -1,7 +1,7 @@
 include(unroll.m4)
 
 divert(-1)
-define(`m4abs', `ifelse(eval($1 >= 0), `1', `$1', eval(0-$1))')dnl
+define(`m4abs', `ifelse(eval(($1) >= 0), `1', `$1', eval(0-($1)))')dnl
 divert(0)dnl
 
 #include "harmonics.h"
@@ -49,15 +49,15 @@ export void l2l(
 		const double y = yrels[i];
 		const double z = zrels[i];
 
-		const double xxyy  = x*x + y*y;
+		const double xxyy  = x*x + y*y + __DBL_EPSILON__*10;
 		const double rho2  = xxyy + z*z;
-		const double rho   = sqrt(rho2 + __DBL_EPSILON__*10);
+		const double rho   = sqrt(rho2);
 		const double rho_1 = 1.0d / rho;
 
 		const double costheta = z * rho_1;
-		const double sintheta = sqrt(abs(1.0d - costheta*costheta));
+		const double sintheta = sqrt(1.0d - costheta*costheta + __DBL_EPSILON__*10);
 
-		const double phiMag_1 = rsqrt(xxyy + __DBL_EPSILON__*10);
+		const double phiMag_1 = rsqrt(xxyy);
 		double mag_1 = 1.0d;
 		double phi_x = 1.0d;
 		double phi_y = 0.0d;
@@ -65,7 +65,7 @@ export void l2l(
 
 		// Set up rho's
 		double rhos[ORDER];
-		rhos[0] = 1.0;
+		rhos[0] = 1.0d;
 		rhos[1] = rho;
 		rhos[2] = rho2;
 		LUNROLL(n, 3, ORDER-1, `rhos[n] = rhos[decr(n)] * rho;

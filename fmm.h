@@ -28,7 +28,7 @@ public:
 	Profiler profiler;
 	int ne2p, np2p;
 	
-	FMM3D(double theta, int leafCapacity);
+	FMM3D(double theta, int leafCapacity, int neighsProximity);
 	
 	void buildTree(const int nsrc,
 				   const double* __restrict const xsrc,

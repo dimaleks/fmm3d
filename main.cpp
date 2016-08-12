@@ -24,8 +24,8 @@ void check(const double * ref, const double * res, const int N)
 	printf("\nChecking...\n");
 	for(int i = 0; i < N; ++i)
 	{
-		assert(!std::isnan(ref[i]));
-		assert(!std::isnan(res[i]));
+//		assert(!std::isnan(ref[i]));
+//		assert(!std::isnan(res[i]));
 
 		const double err = ref[i] - res[i];
 		const double maxval = std::max(fabs(res[i]), fabs(ref[i]));
@@ -51,7 +51,7 @@ void check(const double * ref, const double * res, const int N)
 
 void test(double theta, double tol, bool verify = true)
 {
-	const int nsrc = 30000;
+	const int nsrc = 191000;
 	double *xsrc, *ysrc, *zsrc, *qsrc;
 
 	posix_memalign((void **)&xsrc, 32, sizeof(double) * nsrc);
@@ -80,7 +80,7 @@ void test(double theta, double tol, bool verify = true)
 	ysrc[1] = -0.5;
 	zsrc[1] = -0.5;
 
-	int ndst = 30000;
+	int ndst = 191000;
 	double *xdst, *ydst, *zdst;
 	double *xfrc,  *yfrc,  *zfrc,  *potentials;
 	double *xfrcL, *yfrcL, *zfrcL, *potentialsL;
@@ -110,8 +110,8 @@ void test(double theta, double tol, bool verify = true)
 
 	printf("Testing %s with %d sources and %d targets (theta %.3e)...\n", "POTENTIAL", nsrc, ndst, theta);
 
-	FMM3D fmm(0.5, 100);
-	const int iters = 2;
+	FMM3D fmm(0.5, 300, 1);
+	const int iters = 3;
 	for (int n=0; n<iters; n++)
 	{
 		fmm.buildTree(nsrc, xsrc, ysrc, zsrc, qsrc);

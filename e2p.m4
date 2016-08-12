@@ -13,7 +13,7 @@ export void e2p(
 		uniform const double exps[],
 		uniform double& pot)
 {
-	double s = 0;
+	double s = 0.0d;
 
 	const uniform int niceNexps = ((nexps + 7) / 8) * 8;
 
@@ -24,13 +24,13 @@ export void e2p(
 		const double z = zrel[i];
 
 		// compute 1/rho
-		const double xxyy  = x*x + y*y;
+		const double xxyy  = x*x + y*y + __DBL_EPSILON__*10;
 		const double rho2  = xxyy + z*z;
 		const double rho_1 = rsqrt(rho2);
-		const double rho   = 1.0 / rho_1;
+		const double rho   = 1.0d / rho_1;
 
 		const double costheta = z * rho_1;
-		const double sintheta = sqrt(1 - costheta*costheta);
+		const double sintheta = sqrt(1.0d - costheta*costheta + __DBL_EPSILON__*10);
 
 		// phi = atan2(y, x);
 		// cos_m = cos(n * phi);

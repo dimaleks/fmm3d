@@ -13,9 +13,9 @@ void extent(const int N,
 			double& ext);
 
 void morton(const int N, const double* __restrict const x, const double* __restrict const y, const double* __restrict const z,
-			const double xmin, const double ymin, const double zmin, const double ext, long long* __restrict index);
+			const double xmin, const double ymin, const double zmin, const double ext, int64_t* __restrict index);
 
-void sort(const int N, long long* __restrict index, int* __restrict keys);
+void sort(const int N, int64_t* __restrict index, int* __restrict keys);
 
 void reorder(const int N,
 			 const int* __restrict const keys,
@@ -101,9 +101,9 @@ inline void transposeMx8(const double *from, double *to[8], int m)
 }
 
 
-inline int getThirdBits(const long long m)
+inline int getThirdBits(const int64_t m)
 {
-	long long x = m;
+	int64_t x = m;
 	x = x               & 0x1249249249249249;
 	x = (x ^ (x >> 2))  & 0x10c30c30c30c30c3;
 	x = (x ^ (x >> 4))  & 0x100f00f00f00f00f;
@@ -114,7 +114,7 @@ inline int getThirdBits(const long long m)
 	return x;
 }
 
-inline void mortonDecode(const long long m, int& x, int& y, int& z)
+inline void mortonDecode(const int64_t m, int& x, int& y, int& z)
 {
 	// https://github.com/Forceflow/libmorton
 	x = getThirdBits(m);
@@ -122,9 +122,9 @@ inline void mortonDecode(const long long m, int& x, int& y, int& z)
 	z = getThirdBits(m >> 2);
 }
 
-inline long long splitBy3bits(const int a)
+inline int64_t splitBy3bits(const int a)
 {
-	long long x = a;
+	int64_t x = a;
 	x = x               & 0x00000000001fffff;
 	x = (x | (x << 32)) & 0x001f00000000ffff;
 	x = (x | (x << 16)) & 0x001f0000ff0000ff;
@@ -135,7 +135,7 @@ inline long long splitBy3bits(const int a)
 	return x;
 }
 
-inline long long mortonEncode(const int xid, const int yid, const int zid)
+inline int64_t mortonEncode(const int xid, const int yid, const int zid)
 {
 	// https://github.com/Forceflow/libmorton
 	return splitBy3bits(xid) | (splitBy3bits(yid) << 1) | (splitBy3bits(zid) << 2);

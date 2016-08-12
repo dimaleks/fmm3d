@@ -26,21 +26,21 @@ export void p2e(
 		const double q = qsrc[i];
 
 		// compute 1/rho = rho_1 and rho = rho^2 * rho^-1
-		const double xxyy  = x*x + y*y;
+		const double xxyy  = x*x + y*y + __DBL_EPSILON__*10;
 		const double rho2  = xxyy + z*z;
 		const double rho_1 = rsqrt(rho2);
-		const double rho   = 1.0 / rho_1;
+		const double rho   = 1.0d / rho_1;
 
 		const double costheta = z * rho_1;
-		const double sintheta = sqrt(1 - costheta*costheta);
+		const double sintheta = sqrt(1.0d - costheta*costheta + __DBL_EPSILON__*10);
 		double factor = q;
 
 		// phi = atan2(y, x);
 		// cos_m = cos(n * phi);
 		const double phiMag_1 = rsqrt(xxyy);
-		double mag_1 = 1;
-		double phi_x = 1;
-		double phi_y = 0;
+		double mag_1 = 1.0d;
+		double phi_x = 1.0d;
+		double phi_y = 0.0d;
 		double tmp;
 
 		LUNROLL(m, 0, ORDER-1, `const double cosphi_`'m = phi_x * mag_1;

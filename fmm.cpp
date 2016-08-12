@@ -12,8 +12,8 @@
 
 #define LMAX 21
 
-FMM3D::FMM3D(double theta, int leafCapacity) :
-theta2(theta*theta), tree(leafCapacity), ne2p(0), np2p(0)
+FMM3D::FMM3D(double theta, int leafCapacity, int neighsProximity) :
+theta2(theta*theta), tree(leafCapacity, neighsProximity), ne2p(0), np2p(0)
 {
 	std::fill(zeros, zeros + EXPSIZE, 0);
 }

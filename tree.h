@@ -68,11 +68,11 @@ namespace Tree
 		int child_id;
 		double Q, xcom, ycom, zcom, r, w;
 		int level;
-		long long morton_id;
+		int64_t morton_id;
 
 		//int parent;
 
-		void setup(int part_start, int part_end, int level, long long morton_id)
+		void setup(int part_start, int part_end, int level, int64_t morton_id)
 		{
 			this->part_start = part_start;
 			this->part_end = part_end;
@@ -86,8 +86,8 @@ namespace Tree
 	class Tree
 	{
 		static constexpr int nchildren = 8;
-		static constexpr int neighsProximity = 1;
-		static constexpr int nNeighs = (2*neighsProximity + 1) * (2*neighsProximity + 1) * (2*neighsProximity + 1) - 1;
+		int neighsProximity;
+		int nNeighs;
 
 		double zeros alignas(32) [EXPSIZE];
 
@@ -95,11 +95,11 @@ namespace Tree
 		int leafCapacity;
 
 		double ext, xmin, ymin, zmin;
-		alignedVector<long long> mortonIndex;
+		alignedVector<int64_t> mortonIndex;
 		alignedVector<int> order;
 
 		std::vector<std::set<int>> neighbors;
-		std::vector< std::pair<long long, int> > keys2nodes;
+		std::vector< std::pair<int64_t, int> > keys2nodes;
 
 		int curNNodes;
 
@@ -115,7 +115,7 @@ namespace Tree
 		alignedVector<double> locExps;
 
 
-		Tree(const int leafCapacity);
+		Tree(const int leafCapacity, const int neighsProximity);
 
 		int findLeaf(const double xp, const double yp, const double zp);
 

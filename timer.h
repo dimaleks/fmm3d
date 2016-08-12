@@ -38,18 +38,18 @@ public:
         _end = std::chrono::high_resolution_clock::now();
     }
     
-    inline long long elapsed()
+    inline int64_t elapsed()
     {
         if (_end == none) _end = std::chrono::high_resolution_clock::now();
         
         return std::chrono::duration <long int, std::nano>(_end - _start).count();
     }
     
-    inline long long elapsedAndReset()
+    inline int64_t elapsedAndReset()
     {
         if (_end == none) _end = std::chrono::high_resolution_clock::now();
         
-        long long t = std::chrono::duration <long long, std::nano>(_end - _start).count();
+        int64_t t = std::chrono::duration <int64_t, std::nano>(_end - _start).count();
         
         _start = _end;
         _end = none;

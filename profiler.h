@@ -21,7 +21,7 @@ struct Timings
 {
     bool started;
     int iterations;
-    long long total;
+    int64_t total;
     Timer timer;
     
     Timings() : started(false), iterations(0), total(0), timer() {};

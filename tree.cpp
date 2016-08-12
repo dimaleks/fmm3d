@@ -20,7 +20,8 @@
 namespace Tree
 {
 	
-	Tree::Tree(int leafCapacity) : leafCapacity(leafCapacity)
+	Tree::Tree(const int leafCapacity, const int neighsProximity) :
+		leafCapacity(leafCapacity),	neighsProximity(neighsProximity), nNeighs( (2*neighsProximity + 1) * (2*neighsProximity + 1) * (2*neighsProximity + 1) - 1)
 	{
 		std::fill(zeros, zeros + EXPSIZE, 0);
 	}
@@ -32,7 +33,7 @@ namespace Tree
 		const int s = node->part_start;
 		const int e = node->part_end;
 		const int l = node->level;
-		const long long mId = node->morton_id;
+		const int64_t mId = node->morton_id;
 		const bool leaf = e - s <= leafCapacity || l + 1 > LMAX;
 		
 		
@@ -69,8 +70,8 @@ namespace Tree
 			{
 				const int shift = 3 * (LMAX - l - 1);
 				
-				const long long key1 = mId | ((long long)c << shift);
-				const long long key2 = key1 + ((long long)1 << shift) - 1;
+				const int64_t key1 = mId | ((int64_t)c << shift);
+				const int64_t key2 = key1 + ((int64_t)1 << shift) - 1;
 				
 				const size_t indexmin = (c == 0)             ? s : std::lower_bound(mortonIndex.ptr()+s, mortonIndex.ptr()+e, key1) - mortonIndex.ptr();
 				const size_t indexsup = (c == nchildren - 1) ? e : std::upper_bound(mortonIndex.ptr()+s, mortonIndex.ptr()+e, key2) - mortonIndex.ptr();
@@ -91,7 +92,7 @@ namespace Tree
 			double yrels  alignas(32) [nchildren];
 			double zrels  alignas(32) [nchildren];
 			const double *ptrExps[nchildren];
-			alignedVector<double> expsBuffer(nchildren*EXPSIZE);
+			double expsBuffer  alignas(32) [nchildren*EXPSIZE];
 			
 			node_setup(xsorted.ptr() + s, ysorted.ptr() + s, zsorted.ptr() + s, qsorted.ptr() + s, e - s,
 					   node->Q, node->xcom, node->ycom, node->zcom, node->r, node->w);
@@ -119,8 +120,8 @@ namespace Tree
 				ptrExps[c] = expansions.ptr() + chId*EXPSIZE;
 			}
 			
-			transpose8xM(ptrExps, expsBuffer.ptr(), EXPSIZE);
-			ispc::e2e(xrels, yrels, zrels, expsBuffer.ptr(), expansions.ptr() + nodeid*EXPSIZE);
+			transpose8xM(ptrExps, expsBuffer, EXPSIZE);
+			ispc::e2e(xrels, yrels, zrels, expsBuffer, expansions.ptr() + nodeid*EXPSIZE);
 		}
 	}
 	
@@ -132,8 +133,7 @@ namespace Tree
 		double yrels  alignas(32) [nchildren];
 		double zrels  alignas(32) [nchildren];
 		double *ptrExps[nchildren];
-		alignedVector<double> expsBuffer(nchildren*EXPSIZE);
-		expsBuffer.fill(0);
+		double expsBuffer alignas(32) [nchildren*EXPSIZE] = {0};
 		
 		if (parent->child_id == 0) return;
 		
@@ -150,8 +150,8 @@ namespace Tree
 			ptrExps[c] = locExps.ptr() + chId*EXPSIZE;
 		}
 		
-		ispc::l2l(xrels, yrels, zrels, locExps.ptr() + nodeid*EXPSIZE, expsBuffer.ptr());
-		transposeMx8((const double*)expsBuffer.ptr(), ptrExps, EXPSIZE);
+		ispc::l2l(xrels, yrels, zrels, locExps.ptr() + nodeid*EXPSIZE, expsBuffer);
+		transposeMx8((const double*)expsBuffer, ptrExps, EXPSIZE);
 		
 		// Now for every child:
 		// find the nodes that belong to parent's neigh list
@@ -193,8 +193,8 @@ namespace Tree
 				if (count % nchildren == 7)
 				{
 					// Change division to mult in the kernel
-					transpose8xM((const double**)ptrExps, expsBuffer.ptr(), EXPSIZE);
-					ispc::e2l(xrels, yrels, zrels, (const double*)expsBuffer.ptr(), locExps.ptr() + chId*EXPSIZE);
+					transpose8xM((const double**)ptrExps, expsBuffer, EXPSIZE);
+					ispc::e2l(xrels, yrels, zrels, (const double*)expsBuffer, locExps.ptr() + chId*EXPSIZE);
 					count = -1; // Will be increased immediately later
 				}
 				count++;
@@ -206,8 +206,8 @@ namespace Tree
 				for (int i=count; i<nchildren; i++)
 					ptrExps[i] = zeros;
 				
-				transpose8xM((const double**)ptrExps, expsBuffer.ptr(), EXPSIZE);
-				ispc::e2l(xrels, yrels, zrels, (const double*)expsBuffer.ptr(), locExps.ptr() + chId*EXPSIZE);
+				transpose8xM((const double**)ptrExps, expsBuffer, EXPSIZE);
+				ispc::e2l(xrels, yrels, zrels, (const double*)expsBuffer, locExps.ptr() + chId*EXPSIZE);
 			}
 			
 //			if (true)
@@ -275,10 +275,10 @@ namespace Tree
 							z < 0 || z >= (1 << LMAX) ||
 							(x==xcode && y==ycode && z==zcode) )  continue;
 						
-						long long neighCode = mortonEncode(x, y, z);
+						int64_t neighCode = mortonEncode(x, y, z);
 						
 						// Find the node, which code is the biggest to be smaller or equal to nid
-						auto ptr = std::lower_bound(keys2nodes.begin(), keys2nodes.end(), std::pair<long long, int>(neighCode, 0),
+						auto ptr = std::lower_bound(keys2nodes.begin(), keys2nodes.end(), std::pair<int64_t, int>(neighCode, 0),
 													[] (auto& a, auto& b) -> bool { return a.first <= b.first; } ) - 1;
 						
 						while (node->level < nodes[ptr->second].level)
@@ -329,8 +329,8 @@ namespace Tree
 		int yid = std::floor((yp - ymin) * factor);
 		int zid = std::floor((zp - ymin) * factor);
 		
-		long long code = mortonEncode(xid, yid, zid);
-		auto ptr = std::lower_bound(keys2nodes.begin(), keys2nodes.end(), std::pair<long long, int>(code, 0),
+		int64_t code = mortonEncode(xid, yid, zid);
+		auto ptr = std::lower_bound(keys2nodes.begin(), keys2nodes.end(), std::pair<int64_t, int>(code, 0),
 									[] (auto& a, auto& b) -> bool { return a.first <= b.first; } ) - 1;
 		
 //		printf("%f %f %f --> %s  --> %s (%d)   %f %f %f\n", xp, yp, zp, int_to_binary(code), int_to_binary(ptr->first), ptr->second,
@@ -384,7 +384,6 @@ namespace Tree
 #pragma omp single nowait
 			{
 				curNNodes = 1;
-				std::fill(expansions.ptr(), expansions.ptr() + maxNodes*EXPSIZE, 0);
 				nodes[0].setup(0, nsrc, 0, 0);
 				buildRecursive(0);
 			}

@@ -58,14 +58,14 @@ void extent(const int N,
 }
 
 void morton(const int N, const double* __restrict const x, const double* __restrict const y, const double* __restrict const z,
-		const double xmin, const double ymin, const double zmin, const double ext, long long* __restrict index)
+		const double xmin, const double ymin, const double zmin, const double ext, int64_t* __restrict index)
 {
 	ispc::morton(N, x, y, z, xmin, ymin, zmin, ext, index, omp_get_max_threads());
 }
 
-void sort(const int N, long long* __restrict index, int* __restrict order)
+void sort(const int N, int64_t* __restrict index, int* __restrict order)
 {
-	std::pair<long long, int> *kv;
+	std::pair<int64_t, int> *kv;
 	posix_memalign((void **)&kv, 32, sizeof(*kv) * N);
 
 #pragma omp parallel for

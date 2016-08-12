@@ -2,7 +2,7 @@ include(unroll.m4)
 #include "harmonics.h"
 
 divert(-1)
-define(`m4abs', `ifelse(eval($1 >= 0), `1', `$1', eval(0-$1))')dnl
+define(`m4abs', `ifelse(eval(($1) >= 0), `1', `$1', eval(0-($1)))')dnl
 define(`feval', `syscmd( printf "%0.16fd" $(bc -l <<< "define f(x) { if(x <= 1) return (1); return (f(x-1) * x); } scale=16; print $1") )')
 divert(0)
 
@@ -23,17 +23,17 @@ export void l2p(
 		const double z = zt[i];
 
 		// compute 1/rho
-		const double xxyy  = x*x + y*y;
+		const double xxyy  = x*x + y*y + __DBL_EPSILON__*10;
 		const double rho2  = xxyy + z*z;
-		const double rho_1 = rsqrt(rho2 + __DBL_EPSILON__*10);
-		const double rho   = 1.0 / rho_1;
+		const double rho_1 = rsqrt(rho2);
+		const double rho   = 1.0d / rho_1;
 
 		const double costheta = z * rho_1;
-		const double sintheta = sqrt(1 - costheta*costheta);
+		const double sintheta = sqrt(1.0d - costheta*costheta + __DBL_EPSILON__*10);
 
 		// phi = atan2(y, x);
 		// cos_m = cos(n * phi);
-		const double phiMag_1 = rsqrt(xxyy + __DBL_EPSILON__*10);
+		const double phiMag_1 = rsqrt(xxyy);
 		double mag_1 = 1.0d;
 		double phi_x = 1.0d;
 		double phi_y = 0.0d;
