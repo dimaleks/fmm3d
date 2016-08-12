@@ -3,6 +3,7 @@
 #include <immintrin.h>
 #include <vector>
 #include <cmath>
+#include <omp.h>
 
 #include "fmm.h"
 #include "e2p.h"
@@ -223,10 +224,22 @@ void FMM3D::potential(const int ndst,
 			evaluate(xdst[i], ydst[i], zdst[i],
 					 xrel[i], yrel[i], zrel[i], expPtrs[i],
 					 pot[i]);
-		
+	});
+	
+	profiler.profile("Potential EXPS", [&]() {
 		// TODO:
 		// Consolidate particles within the same leaf, get rid of gather in l2p
-		ispc::l2p(xrel.ptr(), yrel.ptr(), zrel.ptr(), expPtrs.ptr(), ndst, pot);
+#pragma omp parallel
+		{
+			const int nThreads = omp_get_max_threads();
+			const int chunkSize = ((ndst / nThreads) | 31) + 1; // Divisible by 32, larger than minimum required
+
+			const int thId = omp_get_thread_num();
+			const int start = thId * chunkSize;
+			const int myNdst = std::min(chunkSize, ndst - start);
+			
+			ispc::l2p(xrel.ptr()+start, yrel.ptr()+start, zrel.ptr()+start, expPtrs.ptr()+start, myNdst, pot+start);
+		}
 	});
 }
 
@@ -252,4 +265,22 @@ void FMM3D::force(const int ndst,
 		
 		ispc::l2pForce(xrel.ptr(), yrel.ptr(), zrel.ptr(), expPtrs.ptr(), ndst, xfrc, yfrc, zfrc);
 	});
+	
+	profiler.profile("Force EXPS", [&]() {
+		// TODO:
+		// Consolidate particles within the same leaf, get rid of gather in l2p
+#pragma omp parallel
+		{
+			const int nThreads = omp_get_max_threads();
+			const int chunkSize = ((ndst / nThreads) | 31) + 1; // Divisible by 32, larger than minimum required
+			
+			const int thId = omp_get_thread_num();
+			const int start = thId * chunkSize;
+			const int myNdst = std::min(chunkSize, ndst - start);
+			
+			ispc::l2pForce(xrel.ptr()+start, yrel.ptr()+start, zrel.ptr()+start, expPtrs.ptr()+start,
+						   myNdst, xfrc+start, yfrc+start, zfrc+start);
+		}
+	});
+
 }
