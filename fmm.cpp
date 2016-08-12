@@ -262,8 +262,6 @@ void FMM3D::force(const int ndst,
 			evaluate(xdst[i], ydst[i], zdst[i], xrel[i],
 					 yrel[i], zrel[i], expPtrs[i],
 					 xfrc[i], yfrc[i], zfrc[i]);
-		
-		ispc::l2pForce(xrel.ptr(), yrel.ptr(), zrel.ptr(), expPtrs.ptr(), ndst, xfrc, yfrc, zfrc);
 	});
 	
 	profiler.profile("Force EXPS", [&]() {
