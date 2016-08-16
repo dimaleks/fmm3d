@@ -2,9 +2,9 @@ order ?= 10
 fast-e2l ?= 0
 ORDERFLAG = -DORDER=$(order)
 
-CXXFLAGS +=-g -fopenmp -fno-strict-aliasing -march=native -mtune=native -O3 -std=c++14 -m64
+CXXFLAGS +=-g -fopenmp -fno-strict-aliasing -march=native -mtune=native -O3 -std=c++14 -m64 -fPIC
 LINKFLAGS+=-fopenmp -O3 -march=native -mtune=native -flto
-ISPCFLAGS+=-g -O3 --arch=x86-64 --target=host --opt=fast-math -wno-perf
+ISPCFLAGS+=-g -O3 --arch=x86-64 --target=host --opt=fast-math -wno-perf --pic 
 
 CXXFLAGS +=$(ORDERFLAG)
 ISPCFLAGS+=$(ORDERFLAG)
@@ -45,24 +45,35 @@ ORDER: always_build
 	@diff -q $@ $@.tmp &>/dev/null || cp $@.tmp $@
 	@rm -f $@.tmp
 
-fmm: $(ISPC_OBJ_FILES) $(CPP_OBJ_FILES)
-	$(CXX) $(LINKFLAGS) $^ -o $@ 
-	
-%.o: %.cpp ORDER
+fmm: libfmm.so main.o
+	$(CXX) $(LINKFLAGS) -L./ main.o -lfmm -Wl,-rpath=./ -o $@
+
+libfmm.so: $(ISPC_OBJ_FILES) $(filter-out main.o,$(CPP_OBJ_FILES))	
+	$(CXX) $(LINKFLAGS) -shared -Wl,-soname,$@ $^ -o $@ 
+
+$(CPP_OBJ_FILES): $(ISPC_H_FILES)
+*.ispc *.o *.ispco: ORDER
+
+%.o: %.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-%.ispco: %.ispc ORDER
+%.ispco %.h: %.ispc
 	$(ISPC) $(ISPCFLAGS) $< -o $@ -MMM $(patsubst %.ispc,%.dtmp,$<) -h $(patsubst %.ispc,%.h,$<)
 	@echo "$@: \\" > $(patsubst %.ispc,%.d,$<)
 	@perl -n -e 'chop; print $$_, " "' $(patsubst %.ispc,%.dtmp,$<) >> $(patsubst %.ispc,%.d,$<)
 	@echo "" >> $(patsubst %.ispc,%.d,$<)
 	@rm -f $(patsubst %.ispc,%.dtmp,$<)
 
-%.ispc: %.m4 ORDER
+%.ispc: %.m4
 	m4 $(ORDERFLAG) $(E2LFLAG) $< > $@
 
 clean:
-	rm -f *.o *.d $(ISPC_FROM_M4_FILES) *.ispco fmm
+	rm -f *.o
+	rm -f *.d
+	rm -f $(ISPC_FROM_M4_FILES)
+	rm -f $(ISPC_H_FILES)
+	rm -f *.ispco
+	rm -f fmm
 	
 
 ifneq "$(MAKECMDGOALS)" "clean"
@@ -70,5 +81,5 @@ ifneq "$(MAKECMDGOALS)" "clean"
 -include $(notdir $(patsubst %.ispco,%.d,$(ISPC_OBJ_FILES)))
 endif
 
-.PRECIOUS: %.o %.ispco %.ispc %.cpp
+.PRECIOUS: %.o %.ispco %.ispc %.cpp %.h
 .PHONY: always_build clean
