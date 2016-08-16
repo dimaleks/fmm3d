@@ -21,7 +21,7 @@ namespace Tree
 {
 	
 	Tree::Tree(const int leafCapacity, const int neighsProximity) :
-		leafCapacity(leafCapacity),	neighsProximity(neighsProximity), nNeighs( (2*neighsProximity + 1) * (2*neighsProximity + 1) * (2*neighsProximity + 1) - 1)
+	leafCapacity(leafCapacity),	neighsProximity(neighsProximity), nNeighs( (2*neighsProximity + 1) * (2*neighsProximity + 1) * (2*neighsProximity + 1) - 1)
 	{
 		std::fill(zeros, zeros + EXPSIZE, 0);
 	}
@@ -87,7 +87,7 @@ namespace Tree
 			}
 			
 #pragma omp taskwait
-
+			
 			double xrels  alignas(32) [nchildren];
 			double yrels  alignas(32) [nchildren];
 			double zrels  alignas(32) [nchildren];
@@ -146,7 +146,7 @@ namespace Tree
 			xrels[c] = -child->xcom + parent->xcom;
 			yrels[c] = -child->ycom + parent->ycom;
 			zrels[c] = -child->zcom + parent->zcom;
-				
+			
 			ptrExps[c] = locExps.ptr() + chId*EXPSIZE;
 		}
 		
@@ -181,7 +181,7 @@ namespace Tree
 			diff.clear();
 			std::set_difference(parentNeighs.begin(), parentNeighs.end(),
 								myNeighs.begin(), myNeighs.end(), std::inserter(diff, diff.end()));
-
+			
 			int count = 0;
 			for (auto id : diff)
 			{
@@ -210,15 +210,15 @@ namespace Tree
 				ispc::e2l(xrels, yrels, zrels, (const double*)expsBuffer, locExps.ptr() + chId*EXPSIZE);
 			}
 			
-//			if (true)
-//			{
-//				printf("Node %d:  (%f %f %f),  %d parts\n", chId, nodes[chId].xcom, nodes[chId].ycom, nodes[chId].zcom, nodes[chId].part_end - nodes[chId].part_start);
-//				for (int i=0; i<EXPSIZE; i++)
-//				{
-//					printf("%e  ", locExps[chId*EXPSIZE + i]);
-//				}
-//				printf("\n\n");
-//			}
+			//			if (true)
+			//			{
+			//				printf("Node %d:  (%f %f %f),  %d parts\n", chId, nodes[chId].xcom, nodes[chId].ycom, nodes[chId].zcom, nodes[chId].part_end - nodes[chId].part_start);
+			//				for (int i=0; i<EXPSIZE; i++)
+			//				{
+			//					printf("%e  ", locExps[chId*EXPSIZE + i]);
+			//				}
+			//				printf("\n\n");
+			//			}
 		}
 		
 		// Recurcively decend into children
@@ -284,8 +284,8 @@ namespace Tree
 						while (node->level < nodes[ptr->second].level)
 							ptr--;
 						curset.push(ptr->second);
-//						printf("\t %s (%2d) (%3d %3d %3d -- %s)  #%d\n", int_to_binary(nodes[ptr->second].morton_id),
-//							   nodes[ptr->second].level, (x-xcode)/shift, (y-ycode)/shift, (z-zcode)/shift, int_to_binary(neighCode), ptr->second);
+						//						printf("\t %s (%2d) (%3d %3d %3d -- %s)  #%d\n", int_to_binary(nodes[ptr->second].morton_id),
+						//							   nodes[ptr->second].level, (x-xcode)/shift, (y-ycode)/shift, (z-zcode)/shift, int_to_binary(neighCode), ptr->second);
 					}
 			
 			// TODO: check if this code is not redundant
@@ -313,12 +313,12 @@ namespace Tree
 					neighbors[nodeid].insert(nId);
 			}
 			
-//			printf("\n");
-//			for (int cur : neighbors[nodeid])
-//			{
-//				printf("\t %s (%d)\n", int_to_binary(nodes[cur].morton_id), nodes[cur].level);
-//			}
-//			printf("\n\n\n\n");
+			//			printf("\n");
+			//			for (int cur : neighbors[nodeid])
+			//			{
+			//				printf("\t %s (%d)\n", int_to_binary(nodes[cur].morton_id), nodes[cur].level);
+			//			}
+			//			printf("\n\n\n\n");
 		}
 	}
 	
@@ -333,8 +333,8 @@ namespace Tree
 		auto ptr = std::lower_bound(keys2nodes.begin(), keys2nodes.end(), std::pair<int64_t, int>(code, 0),
 									[] (auto& a, auto& b) -> bool { return a.first <= b.first; } ) - 1;
 		
-//		printf("%f %f %f --> %s  --> %s (%d)   %f %f %f\n", xp, yp, zp, int_to_binary(code), int_to_binary(ptr->first), ptr->second,
-//			   nodes[ptr->second].xcom, nodes[ptr->second].ycom, nodes[ptr->second].zcom);
+		//		printf("%f %f %f --> %s  --> %s (%d)   %f %f %f\n", xp, yp, zp, int_to_binary(code), int_to_binary(ptr->first), ptr->second,
+		//			   nodes[ptr->second].xcom, nodes[ptr->second].ycom, nodes[ptr->second].zcom);
 		return ptr->second;
 	}
 	
@@ -345,7 +345,7 @@ namespace Tree
 					 const double* __restrict const qsrc,
 					 Profiler& profiler)
 	{
-
+		
 		maxNodes = (nsrc + leafCapacity - 1) / leafCapacity * 2000;
 		
 		mortonIndex.resize(nsrc);
@@ -362,43 +362,53 @@ namespace Tree
 		for (int i=0; i<nsrc; i++)
 			order[i] = i;
 		
-		profiler.profile("Tree : extent",   [&]() {
-			extent(nsrc, xsrc, ysrc, zsrc, xmin, ymin, zmin, ext);
-		});
+		profiler.profile("Tree", [&]() {
+			
+			profiler.profile("extent",   [&]() {
+				extent(nsrc, xsrc, ysrc, zsrc, xmin, ymin, zmin, ext);
+			});
+			
+			profiler.profile("sorton",   [&]() {
+				morton(nsrc, xsrc, ysrc, zsrc, xmin, ymin, zmin, ext, mortonIndex.ptr());
+			});
+			
+			profiler.profile("sort",     [&]() {
+				sort(nsrc, mortonIndex.ptr(), order.ptr());
+			});
+			
+			profiler.profile("reorder",  [&]() {
+				reorder(nsrc, order.ptr(), xsrc, ysrc, zsrc, qsrc,
+						xsorted.ptr(), ysorted.ptr(), zsorted.ptr(), qsorted.ptr());
+			});
 		
-		profiler.profile("Tree : morton",   [&]() {
-			morton(nsrc, xsrc, ysrc, zsrc, xmin, ymin, zmin, ext, mortonIndex.ptr());
-		});
-		
-		profiler.profile("Tree : sort",     [&]() {
-			sort(nsrc, mortonIndex.ptr(), order.ptr());
-		});
-		
-		profiler.profile("Tree : reorder",  [&]() {
-			reorder(nsrc, order.ptr(), xsrc, ysrc, zsrc, qsrc,
-					xsorted.ptr(), ysorted.ptr(), zsorted.ptr(), qsorted.ptr());
-		});
-		
-		profiler.profile("Tree : building", [&]() {
-#pragma omp parallel
-#pragma omp single nowait
-			{
-				curNNodes = 1;
-				nodes[0].setup(0, nsrc, 0, 0);
-				buildRecursive(0);
-			}
-		});
-		
-		profiler.profile("Tree : neighbor search", [&]() {
-			findNearestNeighs();
-		});
-		
-		profiler.profile("Tree : local exps", [&]() {
-#pragma omp parallel
-#pragma omp single nowait
-			{
-				computeLocalExpsRecursive(0);
-			}
+			profiler.profile("building", [&]() {
+	#pragma omp parallel
+	#pragma omp single nowait
+				{
+					curNNodes = 1;
+					nodes[0].setup(0, nsrc, 0, 0);
+					buildRecursive(0);
+				}
+			});
 		});
 	}
+	
+	void Tree::computeLocalExps(Profiler& profiler)
+	{
+		profiler.profile("Local Exps", [&]() {
+			
+			profiler.profile("Neighbors", [&]() {
+				findNearestNeighs();
+			});
+			
+			profiler.profile("Expansions", [&]() {
+#pragma omp parallel
+#pragma omp single nowait
+				{
+					computeLocalExpsRecursive(0);
+				}
+			});
+		});
+	}
+	
 }

@@ -34,7 +34,8 @@ public:
 				   const double* __restrict const xsrc,
 				   const double* __restrict const ysrc,
 				   const double* __restrict const zsrc,
-				   const double* __restrict const qsrc);
+				   const double* __restrict const qsrc,
+				   bool needLocalExps);
 	
 	//void recomputeExpansions(const double* __restrict const qsrc);
 	

@@ -114,12 +114,15 @@ void test(double theta, double tol, bool verify = true)
 	const int iters = 3;
 	for (int n=0; n<iters; n++)
 	{
-		fmm.buildTree(nsrc, xsrc, ysrc, zsrc, qsrc);
-		fmm.potential(ndst, xdst, ydst, zdst, potentials);
-		fmm.potentialLog(ndst, xdst, ydst, zdst, potentialsL);
+		fmm.buildTree(nsrc, xsrc, ysrc, zsrc, qsrc, true);
 		
-		fmm.force(ndst, xdst, ydst, zdst, xfrc, yfrc, zfrc);
-		fmm.forceLog(ndst, xdst, ydst, zdst, xfrcL, yfrcL, zfrcL);
+		fmm.profiler.profile("Evaluation", [&]() {
+			fmm.potential(ndst, xdst, ydst, zdst, potentials);
+			fmm.potentialLog(ndst, xdst, ydst, zdst, potentialsL);
+			
+			fmm.force(ndst, xdst, ydst, zdst, xfrc, yfrc, zfrc);
+			fmm.forceLog(ndst, xdst, ydst, zdst, xfrcL, yfrcL, zfrcL);
+		});
 	}
 
 	double usppot = fmm.profiler.elapsed("Potential", Profiler::Unit::us) / ndst;

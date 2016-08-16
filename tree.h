@@ -130,6 +130,8 @@ namespace Tree
 					const double* __restrict const zsrc,
 					const double* __restrict const qsrc,
 					Profiler& profiler);
+		
+		void computeLocalExps(Profiler& profiler);
 	};
 
 }
