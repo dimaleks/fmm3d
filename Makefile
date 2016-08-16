@@ -38,6 +38,17 @@ ISPC_OBJ_FILES = $(patsubst %.ispc,%.ispco,$(ISPC_FILES) $(ISPC_FROM_M4_FILES))
 ISPC_H_FILES   = $(patsubst %.ispco,%.h,$(ISPC_OBJ_FILES))
 CPP_OBJ_FILES  = $(patsubst %.cpp,%.o,$(CPP_FILES))
 
+UNAME_S := $(shell uname -s)
+ifeq ($(UNAME_S),Linux)
+	LIB_FILE = libfmm.so
+	LIB_FLAGS = -shared -Wl,-soname,$@
+	RPATH = -Wl,-rpath=./
+endif
+ifeq ($(UNAME_S),Darwin)
+	LIB_FILE = libfmm.dylib
+	LIB_FLAGS = -dynamiclib
+endif
+
 all: fmm
 
 ORDER: always_build
@@ -45,11 +56,11 @@ ORDER: always_build
 	@diff -q $@ $@.tmp &>/dev/null || cp $@.tmp $@
 	@rm -f $@.tmp
 
-fmm: libfmm.so main.o
-	$(CXX) $(LINKFLAGS) -L./ main.o -lfmm -Wl,-rpath=./ -o $@
+fmm: $(LIB_FILE) main.o
+	$(CXX) $(LINKFLAGS) -L./ main.o $(RPATH) -lfmm -o $@
 
-libfmm.so: $(ISPC_OBJ_FILES) $(filter-out main.o,$(CPP_OBJ_FILES))	
-	$(CXX) $(LINKFLAGS) -shared -Wl,-soname,$@ $^ -o $@ 
+$(LIB_FILE): $(ISPC_OBJ_FILES) $(filter-out main.o,$(CPP_OBJ_FILES))
+	$(CXX) $(LINKFLAGS) $(LIB_FLAGS) $^ -o $@
 
 $(CPP_OBJ_FILES): $(ISPC_H_FILES)
 *.ispc *.o *.ispco: ORDER
@@ -58,7 +69,7 @@ $(CPP_OBJ_FILES): $(ISPC_H_FILES)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 %.ispco %.h: %.ispc
-	$(ISPC) $(ISPCFLAGS) $< -o $@ -MMM $(patsubst %.ispc,%.dtmp,$<) -h $(patsubst %.ispc,%.h,$<)
+	$(ISPC) $(ISPCFLAGS) $< -o $(patsubst %.ispc,%.ispco,$<) -MMM $(patsubst %.ispc,%.dtmp,$<) -h $(patsubst %.ispc,%.h,$<)
 	@echo "$@: \\" > $(patsubst %.ispc,%.d,$<)
 	@perl -n -e 'chop; print $$_, " "' $(patsubst %.ispc,%.dtmp,$<) >> $(patsubst %.ispc,%.d,$<)
 	@echo "" >> $(patsubst %.ispc,%.d,$<)
