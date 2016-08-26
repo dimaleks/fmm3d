@@ -51,7 +51,7 @@ void check(const double * ref, const double * res, const int N)
 
 void test(double theta, double tol, bool verify = true)
 {
-	const int nsrc = 191000;
+	const int nsrc = 1'000'000;
 	double *xsrc, *ysrc, *zsrc, *qsrc;
 
 	posix_memalign((void **)&xsrc, 32, sizeof(double) * nsrc);
@@ -80,7 +80,7 @@ void test(double theta, double tol, bool verify = true)
 	ysrc[1] = -0.5;
 	zsrc[1] = -0.5;
 
-	int ndst = 191000;
+	int ndst = 1'000'000;
 	double *xdst, *ydst, *zdst;
 	double *xfrc,  *yfrc,  *zfrc,  *potentials;
 	double *xfrcL, *yfrcL, *zfrcL, *potentialsL;
@@ -110,18 +110,18 @@ void test(double theta, double tol, bool verify = true)
 
 	printf("Testing %s with %d sources and %d targets (theta %.3e)...\n", "POTENTIAL", nsrc, ndst, theta);
 
-	FMM3D fmm(0.5, 300, 1);
-	const int iters = 3;
+	FMM3D fmm(0.5, 100, 1);
+	const int iters = 1;
 	for (int n=0; n<iters; n++)
 	{
 		fmm.buildTree(nsrc, xsrc, ysrc, zsrc, qsrc, true);
 		
 		fmm.profiler.profile("Evaluation", [&]() {
 			fmm.potential(ndst, xdst, ydst, zdst, potentials);
-			fmm.potentialLog(ndst, xdst, ydst, zdst, potentialsL);
+			//fmm.potentialLog(ndst, xdst, ydst, zdst, potentialsL);
 			
-			fmm.force(ndst, xdst, ydst, zdst, xfrc, yfrc, zfrc);
-			fmm.forceLog(ndst, xdst, ydst, zdst, xfrcL, yfrcL, zfrcL);
+			//fmm.force(ndst, xdst, ydst, zdst, xfrc, yfrc, zfrc);
+			//fmm.forceLog(ndst, xdst, ydst, zdst, xfrcL, yfrcL, zfrcL);
 		});
 	}
 

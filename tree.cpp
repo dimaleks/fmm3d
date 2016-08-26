@@ -346,7 +346,7 @@ namespace Tree
 					 Profiler& profiler)
 	{
 		
-		maxNodes = (nsrc + leafCapacity - 1) / leafCapacity * 2000;
+		maxNodes = (nsrc + leafCapacity - 1) / leafCapacity * 20;
 		
 		mortonIndex.resize(nsrc);
 		order.resize(nsrc);

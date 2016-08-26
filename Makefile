@@ -62,7 +62,6 @@ fmm: $(LIB_FILE) main.o
 $(LIB_FILE): $(ISPC_OBJ_FILES) $(filter-out main.o,$(CPP_OBJ_FILES))
 	$(CXX) $(LINKFLAGS) $(LIB_FLAGS) $^ -o $@
 
-$(CPP_OBJ_FILES): $(ISPC_H_FILES)
 *.ispc *.o *.ispco: ORDER
 
 %.o: %.cpp
